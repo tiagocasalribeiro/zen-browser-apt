@@ -115,7 +115,13 @@ jobs:
         run: |
           dpkg-scanpackages --arch amd64 repo/pool/main > repo/dists/stable/main/binary-amd64/Packages
           gzip -9c repo/dists/stable/main/binary-amd64/Packages > repo/dists/stable/main/binary-amd64/Packages.gz
+
+          # Generate Release (may have empty Suite/Codename)
           apt-ftparchive release repo/dists/stable > repo/dists/stable/Release
+
+          # Force correct distribution fields
+          sed -i 's/^Suite:.*/Suite: stable/' repo/dists/stable/Release
+          sed -i 's/^Codename:.*/Codename: stable/' repo/dists/stable/Release
 
       - name: Sign Release file (InRelease) and export public key
         if: steps.check.outputs.new_version == 'true'
@@ -149,4 +155,4 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./repo
           publish_branch: gh-pages
-          force_orphan: true          # ensures a completely fresh branch
+          force_orphan: true
