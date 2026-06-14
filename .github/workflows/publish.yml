@@ -19,6 +19,12 @@ jobs:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
+      - name: Checkout the original build script
+        uses: actions/checkout@v4
+        with:
+          repository: sh4r10/zen-browser-debian
+          path: builder
+
       - name: Checkout existing published repo (gh-pages)
         uses: actions/checkout@v4
         with:
@@ -26,29 +32,58 @@ jobs:
           path: published
         continue-on-error: true
 
-      - name: Install requirements
-        run: sudo apt-get update && sudo apt-get install -y dpkg-dev apt-utils curl jq
+      - name: Install build requirements
+        run: sudo apt-get update && sudo apt-get install -y dpkg-dev apt-utils
 
-      - name: Download latest official Zen Browser .deb
-        id: download
+      - name: Build the .deb package from the script
+        id: build
         run: |
-          RELEASE_JSON=$(curl -s https://api.github.com/repos/zen-browser/desktop/releases/latest)
-          VERSION=$(echo "$RELEASE_JSON" | jq -r .tag_name)
-          DEB_URL=$(echo "$RELEASE_JSON" | jq -r '.assets[] | select(.name | endswith(".deb")) | .browser_download_url' | head -n 1)
+          cd builder
+          echo "=== Files in builder/ ==="
+          find . -type f | sort
+          echo "=========================="
 
-          if [ -z "$DEB_URL" ]; then
-            echo "::error::No .deb asset found in latest Zen release"
+          # Auto-detect the build script
+          BUILD_SCRIPT=""
+          for name in build.sh build debian-package.sh create-deb.sh package.sh; do
+            FOUND=$(find . -maxdepth 2 -type f -name "$name" | head -n 1)
+            [ -n "$FOUND" ] && { BUILD_SCRIPT="$FOUND"; break; }
+          done
+          [ -z "$BUILD_SCRIPT" ] && BUILD_SCRIPT=$(find . -maxdepth 2 -type f -name "*.sh" -executable | head -n 1)
+
+          if [ -z "$BUILD_SCRIPT" ]; then
+            echo "::error::No build script found. Aborting."
             exit 1
           fi
 
-          echo "Downloading Zen Browser $VERSION from $DEB_URL"
-          curl -L -o "zen-browser_${VERSION}_amd64.deb" "$DEB_URL"
-          ls -la ./*.deb
+          echo "Using build script: $BUILD_SCRIPT"
+          chmod +x "$BUILD_SCRIPT"
+          ./"$BUILD_SCRIPT"
+
+          # Move any .deb files from anywhere under builder/ to the workspace root
+          find . -name "*.deb" -exec mv {} "$GITHUB_WORKSPACE"/ \;
+
+          # Now search the entire workspace for any .deb (in case script put it elsewhere)
+          cd "$GITHUB_WORKSPACE"
+          echo "=== All .deb files in workspace ==="
+          find . -name "*.deb" -print -exec ls -la {} \;
+          echo "=============================="
+
+          # Count them
+          DEB_COUNT=$(find . -name "*.deb" | wc -l)
+          if [ "$DEB_COUNT" -eq 0 ]; then
+            echo "::error::No .deb file was created by the build script."
+            exit 1
+          fi
+
+          # If more than one, just pick the first one (should only be one)
+          # We'll rename it to a standard pattern if needed? Not necessary, keep as is.
 
       - name: Check if a new version exists
         id: check
         run: |
-          deb_file=$(ls -1 *.deb | head -n 1)
+          # At this point we have at least one .deb in the workspace root
+          deb_file=$(ls -1 ./*.deb | head -n 1 | xargs basename)
           if [ -f "published/pool/main/z/zen-browser/$deb_file" ]; then
             echo "new_version=false" >> $GITHUB_OUTPUT
           else
@@ -62,12 +97,12 @@ jobs:
           mkdir -p repo/pool/main/z/zen-browser
           mkdir -p repo/dists/stable/main/binary-amd64
 
-          # Copy old pool if present
+          # Copy old pool if it exists
           if [ -d published/pool ] && ls published/pool/* >/dev/null 2>&1; then
             cp -r published/pool/* repo/pool/
           fi
 
-          # Add the new .deb
+          # Copy all .deb files from workspace root into the pool
           cp ./*.deb repo/pool/main/z/zen-browser/
 
           echo "=== Pool contents ==="
