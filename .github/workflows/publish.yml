@@ -23,17 +23,10 @@ jobs:
           repository: sh4r10/zen-browser-debian
           path: builder
 
-      - name: Checkout existing gh-pages branch
-        uses: actions/checkout@v4
-        with:
-          ref: gh-pages
-          path: published
-        continue-on-error: true
-
       - name: Install build requirements
         run: sudo apt-get update && sudo apt-get install -y dpkg-dev apt-utils
 
-      - name: Build the .deb package from the script
+      - name: Build the .deb package
         run: |
           cd builder
           BUILD_SCRIPT=""
@@ -52,101 +45,36 @@ jobs:
           chmod +x "$BUILD_SCRIPT"
           ./"$BUILD_SCRIPT"
 
+          # Move .deb to workspace root
           find . -name "*.deb" -exec mv {} "$GITHUB_WORKSPACE"/ \;
           cd "$GITHUB_WORKSPACE"
+
           echo "=== .deb files ==="
           find . -name "*.deb" -exec ls -la {} \;
 
-          # This check no longer fails when files exist
-          DEB_COUNT=$(find . -name "*.deb" | wc -l)
-          if [ "$DEB_COUNT" -eq 0 ]; then
+          if [ "$(find . -name "*.deb" | wc -l)" -eq 0 ]; then
             echo "::error::No .deb created."
             exit 1
           fi
 
-      - name: Check if a new version exists
+      - name: Check if new version is needed
         id: check
         run: |
           deb_file=$(ls -1 ./*.deb | head -n 1 | xargs basename)
-          if [ -f "published/pool/main/z/zen-browser/$deb_file" ]; then
-            echo "new_version=false" >> $GITHUB_OUTPUT
+          # Check if file exists on the existing gh-pages branch (if any)
+          if git ls-remote --exit-code --heads origin gh-pages; then
+            REMOTE_POOL_FILE=$(curl -s -o /dev/null -w "%{http_code}" "https://tiagocasalribeiro.github.io/zen-browser-apt/pool/main/z/zen-browser/$deb_file")
+            if [ "$REMOTE_POOL_FILE" = "200" ]; then
+              echo "new_version=false" >> $GITHUB_OUTPUT
+            else
+              echo "new_version=true" >> $GITHUB_OUTPUT
+            fi
           else
             echo "new_version=true" >> $GITHUB_OUTPUT
           fi
           echo "deb_file=$deb_file" >> $GITHUB_OUTPUT
 
-      - name: Prepare repository structure (new version only)
-        if: steps.check.outputs.new_version == 'true'
-        run: |
-          mkdir -p repo/pool/main/z/zen-browser
-          mkdir -p repo/dists/stable/main/binary-amd64
-
-          if [ -d published/pool ] && ls published/pool/* >/dev/null 2>&1; then
-            cp -r published/pool/* repo/pool/
-          fi
-
-          cp ./*.deb repo/pool/main/z/zen-browser/
-
-          cd repo/pool/main/z/zen-browser
-          for deb in *.deb; do
-            version=$(dpkg-deb -f "$deb" Version 2>/dev/null || echo "0")
-            echo "$version $deb"
-          done | sort -Vr | head -n 5 | awk '{print $2}' > /tmp/keep.list
-
-          for deb in *.deb; do
-            if ! grep -qF "$deb" /tmp/keep.list; then
-              echo "Removing old version: $deb"
-              rm "$deb"
-            fi
-          done
-
-          echo "=== Pool after cleanup ==="
-          ls -la .
-
-          cd "$GITHUB_WORKSPACE"
-
-      - name: Generate metadata (new version only)
-        if: steps.check.outputs.new_version == 'true'
-        run: |
-          cd repo
-
-          dpkg-scanpackages --arch amd64 pool/main > dists/stable/main/binary-amd64/Packages
-          gzip -9c dists/stable/main/binary-amd64/Packages > dists/stable/main/binary-amd64/Packages.gz
-
-          apt-ftparchive \
-            -o APT::FTPArchive::Release::Origin="Zen Browser Unofficial" \
-            -o APT::FTPArchive::Release::Label="Zen Browser" \
-            -o APT::FTPArchive::Release::Suite="stable" \
-            -o APT::FTPArchive::Release::Codename="stable" \
-            -o APT::FTPArchive::Release::Architectures="amd64" \
-            -o APT::FTPArchive::Release::Components="main" \
-            -o APT::FTPArchive::Release::Description="Unofficial Debian packages for Zen Browser" \
-            release dists/stable > dists/stable/Release
-
-          echo "=== Packages preview ==="
-          head -20 dists/stable/main/binary-amd64/Packages
-
-      - name: Sign Release file (InRelease) and export public key
-        if: steps.check.outputs.new_version == 'true'
-        env:
-          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
-          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
-        run: |
-          cd repo
-
-          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
-          KEY_ID=$(gpg --list-secret-keys --keyid-format LONG | grep sec | awk '{print $2}' | cut -d'/' -f2)
-
-          rm -f dists/stable/Release.gpg dists/stable/Release.asc
-
-          gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" \
-            --clearsign --armor --output dists/stable/InRelease dists/stable/Release
-
-          gpg --export --armor "$KEY_ID" > KEY.gpg
-
-          gpg --verify dists/stable/InRelease
-
-      - name: Deploy to gh-pages (direct git push)
+      - name: Prepare gh-pages working directory
         if: steps.check.outputs.new_version == 'true'
         run: |
           mkdir deploy
@@ -163,26 +91,114 @@ jobs:
             rm -rf *
           fi
 
-          cp -r "$GITHUB_WORKSPACE"/repo/* .
+      - name: Build repository structure in deploy folder
+        if: steps.check.outputs.new_version == 'true'
+        run: |
+          cd deploy
+
+          # Create directory structure
+          mkdir -p pool/main/z/zen-browser
+          mkdir -p dists/stable/main/binary-amd64
+
+          # Copy the .deb from workspace root into pool
+          cp "$GITHUB_WORKSPACE"/*.deb pool/main/z/zen-browser/
+
+          # Keep only 5 most recent versions
+          cd pool/main/z/zen-browser
+          for deb in *.deb; do
+            version=$(dpkg-deb -f "$deb" Version 2>/dev/null || echo "0")
+            echo "$version $deb"
+          done | sort -Vr | head -n 5 | awk '{print $2}' > /tmp/keep.list
+
+          for deb in *.deb; do
+            if ! grep -qF "$deb" /tmp/keep.list; then
+              echo "Removing old: $deb"
+              rm "$deb"
+            fi
+          done
+          cd "$GITHUB_WORKSPACE/deploy"
+
+      - name: Generate metadata
+        if: steps.check.outputs.new_version == 'true'
+        run: |
+          cd deploy
+
+          dpkg-scanpackages --arch amd64 pool/main > dists/stable/main/binary-amd64/Packages
+          gzip -9c dists/stable/main/binary-amd64/Packages > dists/stable/main/binary-amd64/Packages.gz
+
+          apt-ftparchive \
+            -o APT::FTPArchive::Release::Origin="Zen Browser Unofficial" \
+            -o APT::FTPArchive::Release::Label="Zen Browser" \
+            -o APT::FTPArchive::Release::Suite="stable" \
+            -o APT::FTPArchive::Release::Codename="stable" \
+            -o APT::FTPArchive::Release::Architectures="amd64" \
+            -o APT::FTPArchive::Release::Components="main" \
+            -o APT::FTPArchive::Release::Description="Unofficial Debian packages for Zen Browser" \
+            release dists/stable > dists/stable/Release
+
+          # Enforce non-empty Packages
+          if [ ! -s dists/stable/main/binary-amd64/Packages ]; then
+            echo "::error::Packages file is empty!"
+            exit 1
+          fi
+
+          echo "=== Packages preview ==="
+          head -20 dists/stable/main/binary-amd64/Packages
+
+      - name: Sign Release and export public key
+        if: steps.check.outputs.new_version == 'true'
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          cd deploy
+
+          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+          KEY_ID=$(gpg --list-secret-keys --keyid-format LONG | grep sec | awk '{print $2}' | cut -d'/' -f2)
+
+          rm -f dists/stable/Release.gpg dists/stable/Release.asc
+
+          gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" \
+            --clearsign --armor --output dists/stable/InRelease dists/stable/Release
+
+          gpg --export --armor "$KEY_ID" > KEY.gpg
+
+          gpg --verify dists/stable/InRelease
+
+      - name: Push to gh-pages
+        if: steps.check.outputs.new_version == 'true'
+        run: |
+          cd deploy
           touch .nojekyll
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
           git add -A
-          git commit -m "Update apt repository [skip ci]" || echo "Nothing to commit"
+          git commit -m "Update apt repository [skip ci]" || echo "No changes to commit"
           git push origin gh-pages --force
 
-      - name: Verify deployment
+      - name: Verify live URL
         if: steps.check.outputs.new_version == 'true'
         run: |
           DEB_FILE="${{ steps.check.outputs.deb_file }}"
           LIVE_URL="https://tiagocasalribeiro.github.io/zen-browser-apt/pool/main/z/zen-browser/${DEB_FILE}"
-          echo "Waiting 30 seconds for GitHub Pages..."
+          PACKAGES_URL="https://tiagocasalribeiro.github.io/zen-browser-apt/dists/stable/main/binary-amd64/Packages"
+          echo "Waiting 30s for GitHub Pages..."
           sleep 30
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$LIVE_URL")
-          if [ "$HTTP_CODE" != "200" ]; then
-            echo "::warning::File not accessible (HTTP $HTTP_CODE): $LIVE_URL"
+
+          echo "Checking .deb file..."
+          HTTP_DEB=$(curl -s -o /dev/null -w "%{http_code}" "$LIVE_URL")
+          echo "  Status: $HTTP_DEB"
+
+          echo "Checking Packages file..."
+          HTTP_PKG=$(curl -s -o /dev/null -w "%{http_code}" "$PACKAGES_URL")
+          echo "  Status: $HTTP_PKG"
+          PACKAGES_SIZE=$(curl -s "$PACKAGES_URL" | wc -c)
+          echo "  Size: ${PACKAGES_SIZE} bytes"
+
+          if [ "$HTTP_DEB" != "200" ] || [ "$HTTP_PKG" != "200" ] || [ "$PACKAGES_SIZE" -eq 0 ]; then
+            echo "::warning::Deployment may not be fully propagated yet. Check manually."
           else
-            echo "✅ File is live: $LIVE_URL"
+            echo "✅ Repository is live and Packages file is populated."
           fi
