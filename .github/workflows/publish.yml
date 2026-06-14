@@ -16,12 +16,6 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout the original build script
-        uses: actions/checkout@v4
-        with:
-          repository: sh4r10/zen-browser-debian
-          path: builder
-
       - name: Checkout existing published repo (gh-pages)
         uses: actions/checkout@v4
         with:
@@ -29,38 +23,29 @@ jobs:
           path: published
         continue-on-error: true
 
-      - name: Install build requirements
-        run: sudo apt-get update && sudo apt-get install -y dpkg-dev apt-utils
+      - name: Install requirements
+        run: sudo apt-get update && sudo apt-get install -y dpkg-dev apt-utils curl jq
 
-      - name: Build the .deb package (auto-detect build script)
+      - name: Download latest Zen Browser .deb from official releases
         run: |
-          cd builder
+          # Get the latest release data from Zen Browser's desktop repo
+          RELEASE_JSON=$(curl -s https://api.github.com/repos/zen-browser/desktop/releases/latest)
 
-          # Try to find a build script (common names)
-          BUILD_SCRIPT=""
-          for candidate in build.sh build debian-package.sh create-deb.sh package.sh; do
-            if [ -f "$candidate" ]; then
-              BUILD_SCRIPT="$candidate"
-              break
-            fi
-          done
+          # Extract the tag name (version)
+          VERSION=$(echo "$RELEASE_JSON" | jq -r .tag_name)
+          echo "Latest version: $VERSION"
 
-          # If not found in root, search in subdirectories
-          if [ -z "$BUILD_SCRIPT" ]; then
-            BUILD_SCRIPT=$(find . -maxdepth 2 -type f -name "build.sh" -o -name "build" -o -name "debian-package.sh" | head -n 1)
-          fi
+          # Find the asset URL for the .deb file (amd64)
+          DEB_URL=$(echo "$RELEASE_JSON" | jq -r '.assets[] | select(.name | endswith(".deb")) | .browser_download_url' | head -n 1)
 
-          if [ -z "$BUILD_SCRIPT" ]; then
-            echo "::error::No build script found in the cloned repository. Aborting."
+          if [ -z "$DEB_URL" ]; then
+            echo "::error::No .deb asset found in the latest release"
             exit 1
           fi
 
-          echo "Using build script: $BUILD_SCRIPT"
-          chmod +x "$BUILD_SCRIPT"
-          ./"$BUILD_SCRIPT"
-
-          # Move .deb files to workspace root (no matter where they were created)
-          find . -name "*.deb" -exec mv {} ../ \;
+          echo "Downloading: $DEB_URL"
+          curl -L -o "zen-browser_${VERSION}_amd64.deb" "$DEB_URL"
+          echo "Package saved as zen-browser_${VERSION}_amd64.deb"
 
       - name: Check if a new version exists
         id: check
