@@ -4,7 +4,7 @@ on:
   push:
     branches: [ main ]
   schedule:
-    - cron: '0 0 * * *'         # daily at midnight UTC
+    - cron: '0 0 * * *'
   workflow_dispatch:
 
 permissions:
@@ -45,20 +45,15 @@ jobs:
           BUILD_SCRIPT=""
           for name in build.sh build debian-package.sh create-deb.sh package.sh; do
             FOUND=$(find . -maxdepth 2 -type f -name "$name" | head -n 1)
-            if [ -n "$FOUND" ]; then
-              BUILD_SCRIPT="$FOUND"
-              break
-            fi
+            [ -n "$FOUND" ] && { BUILD_SCRIPT="$FOUND"; break; }
           done
 
-          if [ -z "$BUILD_SCRIPT" ]; then
-            BUILD_SCRIPT=$(find . -maxdepth 2 -type f -name "*.sh" -executable | head -n 1)
-          fi
+          [ -z "$BUILD_SCRIPT" ] && BUILD_SCRIPT=$(find . -maxdepth 2 -type f -name "*.sh" -executable | head -n 1)
 
           if [ -z "$BUILD_SCRIPT" ] && [ -f Makefile ]; then
             echo "Makefile found, running make"
             make
-            find . -name "*.deb" -exec mv {} ../ \;
+            find . -name "*.deb" -exec mv {} "$GITHUB_WORKSPACE" \;
             exit 0
           fi
 
@@ -71,12 +66,15 @@ jobs:
           chmod +x "$BUILD_SCRIPT"
           ./"$BUILD_SCRIPT"
 
-          find . -name "*.deb" -exec mv {} ../ \;
+          # Move any .deb files to workspace root (absolute path)
+          find . -name "*.deb" -exec mv {} "$GITHUB_WORKSPACE" \;
+          echo "=== .deb files in workspace root ==="
+          ls -la "$GITHUB_WORKSPACE"/*.deb
 
       - name: Check if a new version exists
         id: check
         run: |
-          deb_file=$(ls -1 *.deb | head -n 1)
+          deb_file=$(ls -1 "$GITHUB_WORKSPACE"/*.deb | head -n 1 | xargs basename)
           if [ -f "published/pool/main/z/zen-browser/$deb_file" ]; then
             echo "new_version=false" >> $GITHUB_OUTPUT
           else
@@ -90,11 +88,16 @@ jobs:
           mkdir -p repo/pool/main/z/zen-browser
           mkdir -p repo/dists/stable/main/binary-amd64
 
+          # Copy existing pool if present
           if [ -d published/pool ] && ls published/pool/* >/dev/null 2>&1; then
             cp -r published/pool/* repo/pool/
           fi
 
-          cp *.deb repo/pool/main/z/zen-browser/
+          # Copy the new .deb (absolute path)
+          cp "$GITHUB_WORKSPACE"/*.deb repo/pool/main/z/zen-browser/
+
+          echo "=== Pool contents after copy ==="
+          ls -la repo/pool/main/z/zen-browser/
 
           # Keep only the 5 most recent versions
           cd repo/pool/main/z/zen-browser
@@ -110,13 +113,14 @@ jobs:
             fi
           done
 
-      - name: Generate metadata with correct distribution fields (new version only)
+      - name: Generate metadata (new version only)
         if: steps.check.outputs.new_version == 'true'
         run: |
-          dpkg-scanpackages --arch amd64 repo/pool/main > repo/dists/stable/main/binary-amd64/Packages
-          gzip -9c repo/dists/stable/main/binary-amd64/Packages > repo/dists/stable/main/binary-amd64/Packages.gz
+          cd repo
 
-          # Generate Release with Suite and Codename set directly via -o flags
+          dpkg-scanpackages --arch amd64 pool/main > dists/stable/main/binary-amd64/Packages
+          gzip -9c dists/stable/main/binary-amd64/Packages > dists/stable/main/binary-amd64/Packages.gz
+
           apt-ftparchive \
             -o APT::FTPArchive::Release::Origin="Zen Browser Unofficial" \
             -o APT::FTPArchive::Release::Label="Zen Browser" \
@@ -125,12 +129,12 @@ jobs:
             -o APT::FTPArchive::Release::Architectures="amd64" \
             -o APT::FTPArchive::Release::Components="main" \
             -o APT::FTPArchive::Release::Description="Unofficial Debian packages for Zen Browser" \
-            release repo/dists/stable > repo/dists/stable/Release
+            release dists/stable > dists/stable/Release
 
-          # Show the generated Release file for debugging
-          echo "=== Generated Release file ==="
-          cat repo/dists/stable/Release
-          echo "=============================="
+          echo "=== Generated Release ==="
+          cat dists/stable/Release
+          echo "=== Generated Packages (first 20 lines) ==="
+          head -20 dists/stable/main/binary-amd64/Packages
 
       - name: Sign Release file (InRelease) and export public key
         if: steps.check.outputs.new_version == 'true'
@@ -138,21 +142,19 @@ jobs:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: |
+          cd repo
+
           echo "$GPG_PRIVATE_KEY" | gpg --batch --import
           KEY_ID=$(gpg --list-secret-keys --keyid-format LONG | grep sec | awk '{print $2}' | cut -d'/' -f2)
 
-          # Remove old signature files
-          rm -f repo/dists/stable/Release.gpg repo/dists/stable/Release.asc
+          rm -f dists/stable/Release.gpg dists/stable/Release.asc
 
-          # Create InRelease (clearsigned)
           gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" \
-            --clearsign --armor --output repo/dists/stable/InRelease repo/dists/stable/Release
+            --clearsign --armor --output dists/stable/InRelease dists/stable/Release
 
-          # Export public key
-          gpg --export --armor "$KEY_ID" > repo/KEY.gpg
+          gpg --export --armor "$KEY_ID" > KEY.gpg
 
-          # Verify
-          gpg --verify repo/dists/stable/InRelease
+          gpg --verify dists/stable/InRelease
 
       - name: Ensure .nojekyll exists
         run: touch repo/.nojekyll
