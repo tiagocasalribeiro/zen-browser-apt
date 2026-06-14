@@ -1,0 +1,43 @@
+-----BEGIN PGP SIGNED MESSAGE-----
+Hash: SHA512
+
+Architectures: amd64
+Codename: stable
+Components: main
+Date: Sun, 14 Jun 2026 16:53:35 +0000
+Description: Unofficial Debian packages for Zen Browser
+Label: Zen Browser
+Origin: Zen Browser Unofficial
+Suite: stable
+MD5Sum:
+ 3617dc4267e54f496e0896f46311f6eb              213 Release
+ d41d8cd98f00b204e9800998ecf8427e                0 main/binary-amd64/Packages
+ 8abff8bb008a9e0f1eb86040c5a00505               29 main/binary-amd64/Packages.gz
+SHA1:
+ f7c9950aa2e5566edd0eb46b387bb0b549c6ba69              213 Release
+ da39a3ee5e6b4b0d3255bfef95601890afd80709                0 main/binary-amd64/Packages
+ 460ae1bc41bd8a7f4309178b4717a035e1be057f               29 main/binary-amd64/Packages.gz
+SHA256:
+ 1555ecbf8465b84236ffec4fe3c79a4b4b36e534f8d3d0de6242ea162d3dbc8d              213 Release
+ e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855                0 main/binary-amd64/Packages
+ c55bca1bfd9ffe4835d98b57dee6ce3219f734adebe77efe7658741bab39004e               29 main/binary-amd64/Packages.gz
+SHA512:
+ 0c11f2d13f4ae89bfdf79c6c3319451021c45b5f83939d12d02b1a57ba60b63b5f6cf44751559763ce6eff3910c803926cccd7eb703eadb30e4cceb207cabf48              213 Release
+ cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e                0 main/binary-amd64/Packages
+ 1ab510d738496bbda6b480feca1fe904454b30fc856fe524df4fc0d1d99499c7968ca6d961d9f1de4894f04f059627c1182f4a0fe38043553afe8239cae15ff9               29 main/binary-amd64/Packages.gz
+-----BEGIN PGP SIGNATURE-----
+
+iQIzBAEBCgAdFiEES5umeXECIPQAX9w91P4sPXACIsoFAmou3I8ACgkQ1P4sPXAC
+IsrAGA//eAA8Q6m6a9dSkj6Pxwfy1qvshgv62Ezj2/jZJHUnm7fM/qkSMogn4EW5
+O4uzLktRcgnDYM4r2Y7cFt26G59c7XuNTuic8E8bNtjljwWANNDob3FtYMeEvRn+
+1ARml32KEZjKUD4PGcT6OS/iou/TWiY9Nhs3vxVGHeBId1Fc0Gm7faoU0aVJz+80
+IgUwl0OHF7XMX7r+mKjxyIo+NUykooqZRSUFIJZXXgwTr+BNRLXVW1d5DHu+Ns8g
+gxFjMERAk7NHDvUzeuAK06a8aoojRmTOyP5Kr5OeGsVG93gtZnwn0okcmhDaEbeB
+y0jBbxGFRmyE/PWwUNK360u06or+BWTrTdsazVNaFVmH4XfWCSUZVdmgeZcdYJ1E
+4PlC8aW9G6d4EGBhHPRlAE76+ZH+JVIs2m6jb68s8c+lU0kso91z4LeEGfJM5AXp
+tgN5VBxvIbE1AfBmKUsRWkPoypF92uQyXW8aNECI8ezYn/qX5TiSFdWY5yeRPN1S
+6F0VrrugyR/iQMoR9COxzpThDWCBqUS1S3Cb+GLVs+hGXSrEIHxy6Pt9o6Y5iuXr
+s26cCfLzYidI+zSP2pmR//jdwjSv1FyFr58WFberWp7mshZzXTe2u/+cymfzDPnp
+efFJu5cgbhOYRfrQwJLcZm5v+Dj+rxXztGt8p6YpfVyQmeJ+WG4=
+=KoOg
+-----END PGP SIGNATURE-----
