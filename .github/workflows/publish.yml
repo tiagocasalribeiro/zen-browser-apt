@@ -88,20 +88,23 @@ jobs:
           mkdir -p repo/pool/main/z/zen-browser
           mkdir -p repo/dists/stable/main/binary-amd64
 
+          # Copy old pool if present
           if [ -d published/pool ] && ls published/pool/* >/dev/null 2>&1; then
             cp -r published/pool/* repo/pool/
           fi
 
+          # Add all new .deb files
           cp ./*.deb repo/pool/main/z/zen-browser/
 
           echo "=== Pool contents before cleanup ==="
           ls -la repo/pool/main/z/zen-browser/
 
-          # Keep only the 5 most recent versions
+          # Keep only the 5 most recent versions, using dpkg-deb for reliable version extraction
           cd repo/pool/main/z/zen-browser
           for deb in *.deb; do
-            version=$(echo "$deb" | sed -n 's/^zen-browser_\(.*\)_amd64\.deb$/\1/p')
-            [ -n "$version" ] && echo "$version $deb"
+            # Extract version with dpkg-deb (tolerates any filename)
+            version=$(dpkg-deb -f "$deb" Version 2>/dev/null || echo "0")
+            echo "$version $deb"
           done | sort -Vr | head -n 5 | awk '{print $2}' > /tmp/keep.list
 
           for deb in *.deb; do
@@ -111,8 +114,12 @@ jobs:
             fi
           done
 
+          # List contents using relative path (we are in the correct directory)
           echo "=== Pool contents after cleanup ==="
-          ls -la repo/pool/main/z/zen-browser/
+          ls -la .
+
+          # Return to workspace root
+          cd "$GITHUB_WORKSPACE"
 
       - name: Generate metadata (new version only)
         if: steps.check.outputs.new_version == 'true'
@@ -171,7 +178,6 @@ jobs:
       - name: Verify deployment (check live URL)
         if: steps.check.outputs.new_version == 'true'
         run: |
-          # Get the deployed .deb filename from the output
           DEB_FILE="${{ steps.check.outputs.deb_file }}"
           LIVE_URL="https://tiagocasalribeiro.github.io/zen-browser-apt/pool/main/z/zen-browser/${DEB_FILE}"
           echo "Waiting 10 seconds for Pages to propagate..."
