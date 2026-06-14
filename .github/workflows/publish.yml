@@ -68,12 +68,12 @@ jobs:
           chmod +x "$BUILD_SCRIPT"
           ./"$BUILD_SCRIPT"
 
+          # Move any .deb files to workspace root (wherever the script put them)
           find . -name "*.deb" -exec mv {} ../ \;
 
       - name: Check if a new version exists
         id: check
         run: |
-          # Pick the first .deb file (should be the only one)
           deb_file=$(ls -1 *.deb | head -n 1)
           if [ -f "published/pool/main/z/zen-browser/$deb_file" ]; then
             echo "new_version=false" >> $GITHUB_OUTPUT
@@ -85,7 +85,7 @@ jobs:
       - name: Prepare repository structure (new version only)
         if: steps.check.outputs.new_version == 'true'
         run: |
-          # Create base directories
+          # Create base directories upfront (avoids "No such file" later)
           mkdir -p repo/pool/main/z/zen-browser
           mkdir -p repo/dists/stable/main/binary-amd64
 
@@ -118,7 +118,7 @@ jobs:
           gzip -9c repo/dists/stable/main/binary-amd64/Packages > repo/dists/stable/main/binary-amd64/Packages.gz
           apt-ftparchive release repo/dists/stable > repo/dists/stable/Release
 
-      - name: Sign Release file and export public key (new version only)
+      - name: Sign Release file correctly (detached signatures) and export public key
         if: steps.check.outputs.new_version == 'true'
         env:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
@@ -126,9 +126,26 @@ jobs:
         run: |
           echo "$GPG_PRIVATE_KEY" | gpg --batch --import
           KEY_ID=$(gpg --list-secret-keys --keyid-format LONG | grep sec | awk '{print $2}' | cut -d'/' -f2)
+
+          # Create an armored detached signature (Release.asc) – widely compatible
           gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" \
-            --output repo/dists/stable/Release.gpg --sign repo/dists/stable/Release
+            --armor --detach-sign --output repo/dists/stable/Release.asc repo/dists/stable/Release
+
+          # Create a binary detached signature (Release.gpg) – standard for apt
+          gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" \
+            --output repo/dists/stable/Release.gpg --detach-sign repo/dists/stable/Release
+
+          # Export the public key for users
           gpg --export --armor "$KEY_ID" > repo/KEY.gpg
+
+          # Verify both signatures (fail the step if invalid)
+          echo "Verifying Release.asc..."
+          gpg --verify repo/dists/stable/Release.asc repo/dists/stable/Release
+          echo "Verifying Release.gpg..."
+          gpg --verify repo/dists/stable/Release.gpg repo/dists/stable/Release
+
+      - name: Ensure .nojekyll exists (prevents 404)
+        run: touch repo/.nojekyll
 
       - name: Deploy to GitHub Pages (new version only)
         if: steps.check.outputs.new_version == 'true'
