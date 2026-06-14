@@ -117,7 +117,7 @@ jobs:
           gzip -9c repo/dists/stable/main/binary-amd64/Packages > repo/dists/stable/main/binary-amd64/Packages.gz
           apt-ftparchive release repo/dists/stable > repo/dists/stable/Release
 
-      - name: Sign Release file (detached signatures) and export public key
+      - name: Sign Release file (armored signature only) and export public key
         if: steps.check.outputs.new_version == 'true'
         env:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
@@ -126,17 +126,15 @@ jobs:
           echo "$GPG_PRIVATE_KEY" | gpg --batch --import
           KEY_ID=$(gpg --list-secret-keys --keyid-format LONG | grep sec | awk '{print $2}' | cut -d'/' -f2)
 
+          # Create armored detached signature (Release.asc)
           gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" \
             --armor --detach-sign --output repo/dists/stable/Release.asc repo/dists/stable/Release
 
-          gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" \
-            --output repo/dists/stable/Release.gpg --detach-sign repo/dists/stable/Release
-
+          # Export the public key for users
           gpg --export --armor "$KEY_ID" > repo/KEY.gpg
 
-          # Verify signatures
+          # Verify the signature (fails the step if invalid)
           gpg --verify repo/dists/stable/Release.asc repo/dists/stable/Release
-          gpg --verify repo/dists/stable/Release.gpg repo/dists/stable/Release
 
       - name: Ensure .nojekyll exists
         run: touch repo/.nojekyll
