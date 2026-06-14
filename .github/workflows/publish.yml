@@ -39,7 +39,6 @@ jobs:
           find . -type f | sort
           echo "========================================="
 
-          # 1. Try known common names first (including subdirectories)
           BUILD_SCRIPT=""
           for name in build.sh build debian-package.sh create-deb.sh package.sh; do
             FOUND=$(find . -maxdepth 2 -type f -name "$name" | head -n 1)
@@ -49,16 +48,13 @@ jobs:
             fi
           done
 
-          # 2. If still not found, pick any executable shell script (.sh) anywhere (up to 2 levels)
           if [ -z "$BUILD_SCRIPT" ]; then
             BUILD_SCRIPT=$(find . -maxdepth 2 -type f -name "*.sh" -executable | head -n 1)
           fi
 
-          # 3. Last resort: pick any file named "Makefile" and run 'make'
           if [ -z "$BUILD_SCRIPT" ] && [ -f Makefile ]; then
             echo "Makefile found, running make"
             make
-            # move any .deb from anywhere
             find . -name "*.deb" -exec mv {} ../ \;
             exit 0
           fi
@@ -72,13 +68,13 @@ jobs:
           chmod +x "$BUILD_SCRIPT"
           ./"$BUILD_SCRIPT"
 
-          # Move any .deb files to workspace root (wherever the script put them)
           find . -name "*.deb" -exec mv {} ../ \;
 
       - name: Check if a new version exists
         id: check
         run: |
-          deb_file=$(ls *.deb)
+          # Pick the first .deb file (should be the only one)
+          deb_file=$(ls -1 *.deb | head -n 1)
           if [ -f "published/pool/main/z/zen-browser/$deb_file" ]; then
             echo "new_version=false" >> $GITHUB_OUTPUT
           else
@@ -89,10 +85,16 @@ jobs:
       - name: Prepare repository structure (new version only)
         if: steps.check.outputs.new_version == 'true'
         run: |
+          # Create base directories
           mkdir -p repo/pool/main/z/zen-browser
-          if [ -d published/pool ]; then
+          mkdir -p repo/dists/stable/main/binary-amd64
+
+          # Copy old pool contents if they exist
+          if [ -d published/pool ] && ls published/pool/* >/dev/null 2>&1; then
             cp -r published/pool/* repo/pool/
           fi
+
+          # Add the new .deb
           cp *.deb repo/pool/main/z/zen-browser/
 
           # Keep only the 5 most recent versions
@@ -108,8 +110,6 @@ jobs:
               rm "$deb"
             fi
           done
-
-          mkdir -p ../../../dists/stable/main/binary-amd64
 
       - name: Generate metadata (new version only)
         if: steps.check.outputs.new_version == 'true'
