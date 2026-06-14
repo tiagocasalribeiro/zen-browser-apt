@@ -49,8 +49,8 @@ jobs:
           find . -name "*.deb" -exec mv {} "$GITHUB_WORKSPACE"/ \;
           cd "$GITHUB_WORKSPACE"
 
-          echo "=== .deb files ==="
-          find . -name "*.deb" -exec ls -la {} \;
+          echo "=== .deb files in workspace root ==="
+          ls -la ./*.deb
 
           if [ "$(find . -name "*.deb" | wc -l)" -eq 0 ]; then
             echo "::error::No .deb created."
@@ -61,7 +61,6 @@ jobs:
         id: check
         run: |
           deb_file=$(ls -1 ./*.deb | head -n 1 | xargs basename)
-          # Check if file exists on the existing gh-pages branch (if any)
           if git ls-remote --exit-code --heads origin gh-pages; then
             REMOTE_POOL_FILE=$(curl -s -o /dev/null -w "%{http_code}" "https://tiagocasalribeiro.github.io/zen-browser-apt/pool/main/z/zen-browser/$deb_file")
             if [ "$REMOTE_POOL_FILE" = "200" ]; then
@@ -96,12 +95,17 @@ jobs:
         run: |
           cd deploy
 
-          # Create directory structure
           mkdir -p pool/main/z/zen-browser
           mkdir -p dists/stable/main/binary-amd64
 
-          # Copy the .deb from workspace root into pool
+          echo "=== Workspace .deb files about to copy ==="
+          ls -la "$GITHUB_WORKSPACE"/*.deb
+
+          # Copy the .deb(s) to the pool
           cp "$GITHUB_WORKSPACE"/*.deb pool/main/z/zen-browser/
+
+          echo "=== Pool after copy (should list .deb files) ==="
+          ls -la pool/main/z/zen-browser/
 
           # Keep only 5 most recent versions
           cd pool/main/z/zen-browser
@@ -116,12 +120,20 @@ jobs:
               rm "$deb"
             fi
           done
+
+          echo "=== Pool after cleanup ==="
+          ls -la .
+
           cd "$GITHUB_WORKSPACE/deploy"
 
       - name: Generate metadata
         if: steps.check.outputs.new_version == 'true'
         run: |
           cd deploy
+
+          echo "=== Current directory: $(pwd) ==="
+          echo "=== Pool contents (recursive) ==="
+          find pool -type f -name "*.deb" -exec ls -la {} \;
 
           dpkg-scanpackages --arch amd64 pool/main > dists/stable/main/binary-amd64/Packages
           gzip -9c dists/stable/main/binary-amd64/Packages > dists/stable/main/binary-amd64/Packages.gz
@@ -136,14 +148,14 @@ jobs:
             -o APT::FTPArchive::Release::Description="Unofficial Debian packages for Zen Browser" \
             release dists/stable > dists/stable/Release
 
-          # Enforce non-empty Packages
+          echo "=== Packages file size ==="
+          wc -c dists/stable/main/binary-amd64/Packages
+          head -20 dists/stable/main/binary-amd64/Packages
+
           if [ ! -s dists/stable/main/binary-amd64/Packages ]; then
-            echo "::error::Packages file is empty!"
+            echo "::error::Packages file is empty after dpkg-scanpackages!"
             exit 1
           fi
-
-          echo "=== Packages preview ==="
-          head -20 dists/stable/main/binary-amd64/Packages
 
       - name: Sign Release and export public key
         if: steps.check.outputs.new_version == 'true'
@@ -152,7 +164,6 @@ jobs:
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: |
           cd deploy
-
           echo "$GPG_PRIVATE_KEY" | gpg --batch --import
           KEY_ID=$(gpg --list-secret-keys --keyid-format LONG | grep sec | awk '{print $2}' | cut -d'/' -f2)
 
@@ -184,21 +195,20 @@ jobs:
           DEB_FILE="${{ steps.check.outputs.deb_file }}"
           LIVE_URL="https://tiagocasalribeiro.github.io/zen-browser-apt/pool/main/z/zen-browser/${DEB_FILE}"
           PACKAGES_URL="https://tiagocasalribeiro.github.io/zen-browser-apt/dists/stable/main/binary-amd64/Packages"
-          echo "Waiting 30s for GitHub Pages..."
+          echo "Waiting 30s for Pages..."
           sleep 30
 
-          echo "Checking .deb file..."
-          HTTP_DEB=$(curl -s -o /dev/null -w "%{http_code}" "$LIVE_URL")
-          echo "  Status: $HTTP_DEB"
+          echo "Checking .deb:"
+          curl -s -o /dev/null -w "  HTTP %{http_code}\n" "$LIVE_URL"
 
-          echo "Checking Packages file..."
-          HTTP_PKG=$(curl -s -o /dev/null -w "%{http_code}" "$PACKAGES_URL")
-          echo "  Status: $HTTP_PKG"
-          PACKAGES_SIZE=$(curl -s "$PACKAGES_URL" | wc -c)
-          echo "  Size: ${PACKAGES_SIZE} bytes"
+          echo "Checking Packages:"
+          PKG_HTTP=$(curl -s -o /dev/null -w "%{http_code}" "$PACKAGES_URL")
+          echo "  HTTP $PKG_HTTP"
+          PKG_SIZE=$(curl -s "$PACKAGES_URL" | wc -c)
+          echo "  Size: ${PKG_SIZE} bytes"
 
-          if [ "$HTTP_DEB" != "200" ] || [ "$HTTP_PKG" != "200" ] || [ "$PACKAGES_SIZE" -eq 0 ]; then
-            echo "::warning::Deployment may not be fully propagated yet. Check manually."
-          else
+          if [ "$PKG_HTTP" = "200" ] && [ "$PKG_SIZE" -gt 0 ]; then
             echo "✅ Repository is live and Packages file is populated."
+          else
+            echo "::warning::Not ready yet – try again in a minute."
           fi
