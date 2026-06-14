@@ -9,8 +9,6 @@ on:
 
 permissions:
   contents: write
-  pages: write
-  id-token: write
 
 jobs:
   publish:
@@ -25,7 +23,7 @@ jobs:
           repository: sh4r10/zen-browser-debian
           path: builder
 
-      - name: Checkout existing published repo (gh-pages)
+      - name: Checkout existing gh-pages branch
         uses: actions/checkout@v4
         with:
           ref: gh-pages
@@ -36,13 +34,8 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y dpkg-dev apt-utils
 
       - name: Build the .deb package from the script
-        id: build
         run: |
           cd builder
-          echo "=== Files in builder/ ==="
-          find . -type f | sort
-          echo "=========================="
-
           BUILD_SCRIPT=""
           for name in build.sh build debian-package.sh create-deb.sh package.sh; do
             FOUND=$(find . -maxdepth 2 -type f -name "$name" | head -n 1)
@@ -51,25 +44,20 @@ jobs:
           [ -z "$BUILD_SCRIPT" ] && BUILD_SCRIPT=$(find . -maxdepth 2 -type f -name "*.sh" -executable | head -n 1)
 
           if [ -z "$BUILD_SCRIPT" ]; then
-            echo "::error::No build script found. Aborting."
+            echo "::error::No build script found."
             exit 1
           fi
 
-          echo "Using build script: $BUILD_SCRIPT"
+          echo "Using: $BUILD_SCRIPT"
           chmod +x "$BUILD_SCRIPT"
           ./"$BUILD_SCRIPT"
 
-          # Move any .deb files to workspace root
           find . -name "*.deb" -exec mv {} "$GITHUB_WORKSPACE"/ \;
           cd "$GITHUB_WORKSPACE"
-          echo "=== All .deb files in workspace ==="
-          find . -name "*.deb" -print -exec ls -la {} \;
+          echo "=== .deb files ==="
+          find . -name "*.deb" -exec ls -la {} \;
 
-          DEB_COUNT=$(find . -name "*.deb" | wc -l)
-          if [ "$DEB_COUNT" -eq 0 ]; then
-            echo "::error::No .deb file was created by the build script."
-            exit 1
-          fi
+          [ "$(find . -name "*.deb" | wc -l)" -eq 0 ] && { echo "::error::No .deb created."; exit 1; }
 
       - name: Check if a new version exists
         id: check
@@ -88,21 +76,14 @@ jobs:
           mkdir -p repo/pool/main/z/zen-browser
           mkdir -p repo/dists/stable/main/binary-amd64
 
-          # Copy old pool if present
           if [ -d published/pool ] && ls published/pool/* >/dev/null 2>&1; then
             cp -r published/pool/* repo/pool/
           fi
 
-          # Add all new .deb files
           cp ./*.deb repo/pool/main/z/zen-browser/
 
-          echo "=== Pool contents before cleanup ==="
-          ls -la repo/pool/main/z/zen-browser/
-
-          # Keep only the 5 most recent versions, using dpkg-deb for reliable version extraction
           cd repo/pool/main/z/zen-browser
           for deb in *.deb; do
-            # Extract version with dpkg-deb (tolerates any filename)
             version=$(dpkg-deb -f "$deb" Version 2>/dev/null || echo "0")
             echo "$version $deb"
           done | sort -Vr | head -n 5 | awk '{print $2}' > /tmp/keep.list
@@ -114,11 +95,9 @@ jobs:
             fi
           done
 
-          # List contents using relative path (we are in the correct directory)
-          echo "=== Pool contents after cleanup ==="
+          echo "=== Pool after cleanup ==="
           ls -la .
 
-          # Return to workspace root
           cd "$GITHUB_WORKSPACE"
 
       - name: Generate metadata (new version only)
@@ -139,7 +118,7 @@ jobs:
             -o APT::FTPArchive::Release::Description="Unofficial Debian packages for Zen Browser" \
             release dists/stable > dists/stable/Release
 
-          echo "=== Generated Packages (first 20 lines) ==="
+          echo "=== Packages preview ==="
           head -20 dists/stable/main/binary-amd64/Packages
 
       - name: Sign Release file (InRelease) and export public key
@@ -162,29 +141,43 @@ jobs:
 
           gpg --verify dists/stable/InRelease
 
-      - name: Ensure .nojekyll exists
-        run: touch repo/.nojekyll
-
-      - name: Deploy to GitHub Pages (new version only)
+      - name: Deploy to gh-pages (direct git push)
         if: steps.check.outputs.new_version == 'true'
-        uses: peaceiris/actions-gh-pages@v3
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./repo
-          publish_branch: gh-pages
-          force_orphan: true
-          enable_jekyll: false
+        run: |
+          mkdir deploy
+          cd deploy
+          git init
+          git remote add origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
+          git fetch origin gh-pages || true
 
-      - name: Verify deployment (check live URL)
+          if git ls-remote --exit-code --heads origin gh-pages; then
+            git checkout gh-pages
+            find . -maxdepth 1 -not -name '.git' -not -name '.' -exec rm -rf {} \;
+          else
+            git checkout --orphan gh-pages
+            rm -rf *
+          fi
+
+          cp -r "$GITHUB_WORKSPACE"/repo/* .
+          touch .nojekyll
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add -A
+          git commit -m "Update apt repository [skip ci]" || echo "Nothing to commit"
+          git push origin gh-pages --force
+
+      - name: Verify deployment
         if: steps.check.outputs.new_version == 'true'
         run: |
           DEB_FILE="${{ steps.check.outputs.deb_file }}"
           LIVE_URL="https://tiagocasalribeiro.github.io/zen-browser-apt/pool/main/z/zen-browser/${DEB_FILE}"
-          echo "Waiting 10 seconds for Pages to propagate..."
-          sleep 10
+          echo "Waiting 30 seconds for GitHub Pages..."
+          sleep 30
           HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$LIVE_URL")
           if [ "$HTTP_CODE" != "200" ]; then
-            echo "::warning::Deployed file not accessible (HTTP $HTTP_CODE). URL: $LIVE_URL"
+            echo "::warning::File not accessible (HTTP $HTTP_CODE): $LIVE_URL"
           else
-            echo "✅ Deployed file is live at $LIVE_URL"
+            echo "✅ File is live: $LIVE_URL"
           fi
