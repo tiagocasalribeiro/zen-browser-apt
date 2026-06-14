@@ -16,7 +16,7 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true   # future‑proof Node.js version
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
       - name: Checkout the original build script
@@ -117,7 +117,7 @@ jobs:
           gzip -9c repo/dists/stable/main/binary-amd64/Packages > repo/dists/stable/main/binary-amd64/Packages.gz
           apt-ftparchive release repo/dists/stable > repo/dists/stable/Release
 
-      - name: Create InRelease (clearsigned) and export public key
+      - name: Sign Release file (InRelease) and export public key
         if: steps.check.outputs.new_version == 'true'
         env:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
@@ -126,14 +126,17 @@ jobs:
           echo "$GPG_PRIVATE_KEY" | gpg --batch --import
           KEY_ID=$(gpg --list-secret-keys --keyid-format LONG | grep sec | awk '{print $2}' | cut -d'/' -f2)
 
-          # Clearsign the Release file → InRelease (plain text, always works)
+          # Remove any old signature files (they can confuse apt)
+          rm -f repo/dists/stable/Release.gpg repo/dists/stable/Release.asc
+
+          # Create InRelease (clearsigned Release)
           gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" \
             --clearsign --armor --output repo/dists/stable/InRelease repo/dists/stable/Release
 
           # Export the public key for users
           gpg --export --armor "$KEY_ID" > repo/KEY.gpg
 
-          # Verify the InRelease signature (paranoid check)
+          # Verify the InRelease signature
           gpg --verify repo/dists/stable/InRelease
 
       - name: Ensure .nojekyll exists
@@ -146,3 +149,4 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./repo
           publish_branch: gh-pages
+          force_orphan: true          # ensures a completely fresh branch
