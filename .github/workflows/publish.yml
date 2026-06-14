@@ -1,0 +1,103 @@
+name: Build and publish apt repository
+
+on:
+  push:
+    branches: [ main ]
+  schedule:
+    - cron: '0 0 * * *'         # daily at midnight UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the original build script
+        uses: actions/checkout@v4
+        with:
+          repository: sh4r10/zen-browser-debian
+          path: builder
+
+      - name: Checkout existing published repo (gh-pages)
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: published
+        continue-on-error: true
+
+      - name: Install build requirements
+        run: sudo apt-get update && sudo apt-get install -y dpkg-dev apt-utils
+
+      - name: Build the .deb package
+        run: |
+          cd builder
+          chmod +x build.sh
+          ./build.sh
+          mv *.deb ../
+
+      - name: Check if a new version exists
+        id: check
+        run: |
+          deb_file=$(ls *.deb)
+          if [ -f "published/pool/main/z/zen-browser/$deb_file" ]; then
+            echo "new_version=false" >> $GITHUB_OUTPUT
+          else
+            echo "new_version=true" >> $GITHUB_OUTPUT
+          fi
+          echo "deb_file=$deb_file" >> $GITHUB_OUTPUT
+
+      - name: Prepare repository structure (new version only)
+        if: steps.check.outputs.new_version == 'true'
+        run: |
+          mkdir -p repo/pool/main/z/zen-browser
+          if [ -d published/pool ]; then
+            cp -r published/pool/* repo/pool/
+          fi
+          cp *.deb repo/pool/main/z/zen-browser/
+
+          # Keep only the 5 most recent versions (by Debian version sorting)
+          cd repo/pool/main/z/zen-browser
+          for deb in *.deb; do
+            version=$(echo "$deb" | sed -n 's/^zen-browser_\(.*\)_amd64\.deb$/\1/p')
+            [ -n "$version" ] && echo "$version $deb"
+          done | sort -Vr | head -n 5 | awk '{print $2}' > /tmp/keep.list
+
+          for deb in *.deb; do
+            if ! grep -qF "$deb" /tmp/keep.list; then
+              echo "Removing old version: $deb"
+              rm "$deb"
+            fi
+          done
+
+          mkdir -p ../../../dists/stable/main/binary-amd64
+
+      - name: Generate metadata (new version only)
+        if: steps.check.outputs.new_version == 'true'
+        run: |
+          dpkg-scanpackages --arch amd64 repo/pool/main > repo/dists/stable/main/binary-amd64/Packages
+          gzip -9c repo/dists/stable/main/binary-amd64/Packages > repo/dists/stable/main/binary-amd64/Packages.gz
+          apt-ftparchive release repo/dists/stable > repo/dists/stable/Release
+
+      - name: Sign Release file and export public key (new version only)
+        if: steps.check.outputs.new_version == 'true'
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+          KEY_ID=$(gpg --list-secret-keys --keyid-format LONG | grep sec | awk '{print $2}' | cut -d'/' -f2)
+          gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" \
+            --output repo/dists/stable/Release.gpg --sign repo/dists/stable/Release
+          gpg --export --armor "$KEY_ID" > repo/KEY.gpg
+
+      - name: Deploy to GitHub Pages (new version only)
+        if: steps.check.outputs.new_version == 'true'
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./repo
+          publish_branch: gh-pages
