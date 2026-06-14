@@ -16,6 +16,12 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout the original build script
+        uses: actions/checkout@v4
+        with:
+          repository: sh4r10/zen-browser-debian
+          path: builder
+
       - name: Checkout existing published repo (gh-pages)
         uses: actions/checkout@v4
         with:
@@ -23,29 +29,51 @@ jobs:
           path: published
         continue-on-error: true
 
-      - name: Install requirements
-        run: sudo apt-get update && sudo apt-get install -y dpkg-dev apt-utils curl jq
+      - name: Install build requirements
+        run: sudo apt-get update && sudo apt-get install -y dpkg-dev apt-utils
 
-      - name: Download latest Zen Browser .deb from official releases
+      - name: Build the .deb package (intelligent auto-detect)
         run: |
-          # Get the latest release data from Zen Browser's desktop repo
-          RELEASE_JSON=$(curl -s https://api.github.com/repos/zen-browser/desktop/releases/latest)
+          cd builder
+          echo "=== Contents of the cloned repository ==="
+          find . -type f | sort
+          echo "========================================="
 
-          # Extract the tag name (version)
-          VERSION=$(echo "$RELEASE_JSON" | jq -r .tag_name)
-          echo "Latest version: $VERSION"
+          # 1. Try known common names first (including subdirectories)
+          BUILD_SCRIPT=""
+          for name in build.sh build debian-package.sh create-deb.sh package.sh; do
+            FOUND=$(find . -maxdepth 2 -type f -name "$name" | head -n 1)
+            if [ -n "$FOUND" ]; then
+              BUILD_SCRIPT="$FOUND"
+              break
+            fi
+          done
 
-          # Find the asset URL for the .deb file (amd64)
-          DEB_URL=$(echo "$RELEASE_JSON" | jq -r '.assets[] | select(.name | endswith(".deb")) | .browser_download_url' | head -n 1)
+          # 2. If still not found, pick any executable shell script (.sh) anywhere (up to 2 levels)
+          if [ -z "$BUILD_SCRIPT" ]; then
+            BUILD_SCRIPT=$(find . -maxdepth 2 -type f -name "*.sh" -executable | head -n 1)
+          fi
 
-          if [ -z "$DEB_URL" ]; then
-            echo "::error::No .deb asset found in the latest release"
+          # 3. Last resort: pick any file named "Makefile" and run 'make'
+          if [ -z "$BUILD_SCRIPT" ] && [ -f Makefile ]; then
+            echo "Makefile found, running make"
+            make
+            # move any .deb from anywhere
+            find . -name "*.deb" -exec mv {} ../ \;
+            exit 0
+          fi
+
+          if [ -z "$BUILD_SCRIPT" ]; then
+            echo "::error::No build script found. See the file listing above."
             exit 1
           fi
 
-          echo "Downloading: $DEB_URL"
-          curl -L -o "zen-browser_${VERSION}_amd64.deb" "$DEB_URL"
-          echo "Package saved as zen-browser_${VERSION}_amd64.deb"
+          echo "Using build script: $BUILD_SCRIPT"
+          chmod +x "$BUILD_SCRIPT"
+          ./"$BUILD_SCRIPT"
+
+          # Move any .deb files to workspace root (wherever the script put them)
+          find . -name "*.deb" -exec mv {} ../ \;
 
       - name: Check if a new version exists
         id: check
@@ -67,7 +95,7 @@ jobs:
           fi
           cp *.deb repo/pool/main/z/zen-browser/
 
-          # Keep only the 5 most recent versions (by Debian version sorting)
+          # Keep only the 5 most recent versions
           cd repo/pool/main/z/zen-browser
           for deb in *.deb; do
             version=$(echo "$deb" | sed -n 's/^zen-browser_\(.*\)_amd64\.deb$/\1/p')
