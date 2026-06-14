@@ -32,12 +32,35 @@ jobs:
       - name: Install build requirements
         run: sudo apt-get update && sudo apt-get install -y dpkg-dev apt-utils
 
-      - name: Build the .deb package
+      - name: Build the .deb package (auto-detect build script)
         run: |
           cd builder
-          chmod +x build.sh
-          ./build.sh
-          mv *.deb ../
+
+          # Try to find a build script (common names)
+          BUILD_SCRIPT=""
+          for candidate in build.sh build debian-package.sh create-deb.sh package.sh; do
+            if [ -f "$candidate" ]; then
+              BUILD_SCRIPT="$candidate"
+              break
+            fi
+          done
+
+          # If not found in root, search in subdirectories
+          if [ -z "$BUILD_SCRIPT" ]; then
+            BUILD_SCRIPT=$(find . -maxdepth 2 -type f -name "build.sh" -o -name "build" -o -name "debian-package.sh" | head -n 1)
+          fi
+
+          if [ -z "$BUILD_SCRIPT" ]; then
+            echo "::error::No build script found in the cloned repository. Aborting."
+            exit 1
+          fi
+
+          echo "Using build script: $BUILD_SCRIPT"
+          chmod +x "$BUILD_SCRIPT"
+          ./"$BUILD_SCRIPT"
+
+          # Move .deb files to workspace root (no matter where they were created)
+          find . -name "*.deb" -exec mv {} ../ \;
 
       - name: Check if a new version exists
         id: check
