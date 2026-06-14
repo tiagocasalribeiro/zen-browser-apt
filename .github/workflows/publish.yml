@@ -57,7 +57,12 @@ jobs:
           echo "=== .deb files ==="
           find . -name "*.deb" -exec ls -la {} \;
 
-          [ "$(find . -name "*.deb" | wc -l)" -eq 0 ] && { echo "::error::No .deb created."; exit 1; }
+          # This check no longer fails when files exist
+          DEB_COUNT=$(find . -name "*.deb" | wc -l)
+          if [ "$DEB_COUNT" -eq 0 ]; then
+            echo "::error::No .deb created."
+            exit 1
+          fi
 
       - name: Check if a new version exists
         id: check
