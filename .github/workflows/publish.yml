@@ -110,18 +110,30 @@ jobs:
             fi
           done
 
-      - name: Generate metadata (new version only)
+      - name: Generate metadata with correct distribution fields (new version only)
         if: steps.check.outputs.new_version == 'true'
         run: |
           dpkg-scanpackages --arch amd64 repo/pool/main > repo/dists/stable/main/binary-amd64/Packages
           gzip -9c repo/dists/stable/main/binary-amd64/Packages > repo/dists/stable/main/binary-amd64/Packages.gz
 
-          # Generate Release (may have empty Suite/Codename)
-          apt-ftparchive release repo/dists/stable > repo/dists/stable/Release
+          # Create apt-ftparchive configuration to set Suite, Codename, etc.
+          cat > repo/apt-release.conf <<'EOF'
+          APT::FTPArchive::Release {
+            Origin "Zen Browser Unofficial";
+            Label "Zen Browser";
+            Suite "stable";
+            Codename "stable";
+            Architectures "amd64";
+            Components "main";
+            Description "Unofficial Debian packages for Zen Browser";
+          };
+          EOF
 
-          # Force correct distribution fields
-          sed -i 's/^Suite:.*/Suite: stable/' repo/dists/stable/Release
-          sed -i 's/^Codename:.*/Codename: stable/' repo/dists/stable/Release
+          # Generate Release using the configuration
+          apt-ftparchive -c repo/apt-release.conf release repo/dists/stable > repo/dists/stable/Release
+
+          # Clean up config file (not needed in final repo)
+          rm repo/apt-release.conf
 
       - name: Sign Release file (InRelease) and export public key
         if: steps.check.outputs.new_version == 'true'
