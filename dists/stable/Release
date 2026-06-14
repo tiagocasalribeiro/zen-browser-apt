@@ -1,0 +1,24 @@
+Architectures: amd64
+Codename: stable
+Components: main
+Date: Sun, 14 Jun 2026 17:17:03 +0000
+Description: Unofficial Debian packages for Zen Browser
+Label: Zen Browser
+Origin: Zen Browser Unofficial
+Suite: stable
+MD5Sum:
+ 7d09e8f3180ffb6af8abd5f6c1acdb2c              213 Release
+ d41d8cd98f00b204e9800998ecf8427e                0 main/binary-amd64/Packages
+ 60dde0fccb6aa3f6bf7524be21699035               29 main/binary-amd64/Packages.gz
+SHA1:
+ 1fea65f7d2b3565b0d076f24af408efede7052cf              213 Release
+ da39a3ee5e6b4b0d3255bfef95601890afd80709                0 main/binary-amd64/Packages
+ dbb3bd866ebe79719303f6cdc03d143c7565a900               29 main/binary-amd64/Packages.gz
+SHA256:
+ 5f0e92adc9c2ffe27b83717a1e6e52da1f6db8b12bdfb6bce1a58ad752c84349              213 Release
+ e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855                0 main/binary-amd64/Packages
+ fbeace96752687882c29b33f414641f543f599ba388fc7c271fcfc9b2b887c13               29 main/binary-amd64/Packages.gz
+SHA512:
+ b90ffbe720d2e87deff59918f33945031a689c76149e59acd106b09f42ac9e8bdd64cc97e2ba99354f3c3d8584c81943a964700bab9a6e716d427a3d5ee434d0              213 Release
+ cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e                0 main/binary-amd64/Packages
+ 09ac28d1643a32cee37dc8c734816ebc6cc67f0ea167cef4687f325460ee3a1c9ba1c684291245310e9bf8ae880fbc1e652e0b138e6f374b993d6ebd7917bf15               29 main/binary-amd64/Packages.gz
