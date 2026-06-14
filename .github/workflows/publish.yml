@@ -26,7 +26,7 @@ jobs:
       - name: Install build requirements
         run: sudo apt-get update && sudo apt-get install -y dpkg-dev apt-utils
 
-      - name: Build the .deb package
+      - name: Build the .deb package and fix filename
         run: |
           cd builder
           BUILD_SCRIPT=""
@@ -49,7 +49,23 @@ jobs:
           find . -name "*.deb" -exec mv {} "$GITHUB_WORKSPACE"/ \;
           cd "$GITHUB_WORKSPACE"
 
-          echo "=== .deb files in workspace root ==="
+          # ---- Fix missing architecture suffix ----
+          for deb in *.deb; do
+            # Skip if already has architecture (contains _amd64 or _all etc.)
+            if echo "$deb" | grep -Eq '^.*_(amd64|all|i386|arm64)\.deb$'; then
+              echo "Name already correct: $deb"
+              continue
+            fi
+            # Get architecture from package
+            arch=$(dpkg-deb -f "$deb" Architecture 2>/dev/null || echo "amd64")
+            # Build new name with arch inserted before .deb
+            base=$(echo "$deb" | sed 's/\.deb$//')
+            new_name="${base}_${arch}.deb"
+            echo "Renaming: $deb -> $new_name"
+            mv "$deb" "$new_name"
+          done
+
+          echo "=== .deb files after renaming ==="
           ls -la ./*.deb
 
           if [ "$(find . -name "*.deb" | wc -l)" -eq 0 ]; then
@@ -101,10 +117,9 @@ jobs:
           echo "=== Workspace .deb files about to copy ==="
           ls -la "$GITHUB_WORKSPACE"/*.deb
 
-          # Copy the .deb(s) to the pool
           cp "$GITHUB_WORKSPACE"/*.deb pool/main/z/zen-browser/
 
-          echo "=== Pool after copy (should list .deb files) ==="
+          echo "=== Pool after copy ==="
           ls -la pool/main/z/zen-browser/
 
           # Keep only 5 most recent versions
@@ -131,9 +146,8 @@ jobs:
         run: |
           cd deploy
 
-          echo "=== Current directory: $(pwd) ==="
-          echo "=== Pool contents (recursive) ==="
-          find pool -type f -name "*.deb" -exec ls -la {} \;
+          echo "=== Pool files recursive ==="
+          find pool -name "*.deb" -exec ls -la {} \;
 
           dpkg-scanpackages --arch amd64 pool/main > dists/stable/main/binary-amd64/Packages
           gzip -9c dists/stable/main/binary-amd64/Packages > dists/stable/main/binary-amd64/Packages.gz
@@ -153,7 +167,7 @@ jobs:
           head -20 dists/stable/main/binary-amd64/Packages
 
           if [ ! -s dists/stable/main/binary-amd64/Packages ]; then
-            echo "::error::Packages file is empty after dpkg-scanpackages!"
+            echo "::error::Packages file is empty!"
             exit 1
           fi
 
