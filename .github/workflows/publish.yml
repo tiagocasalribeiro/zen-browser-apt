@@ -24,7 +24,7 @@ jobs:
           path: builder
 
       - name: Install build requirements
-        run: sudo apt-get update && sudo apt-get install -y dpkg-dev apt-utils
+        run: sudo apt-get update && sudo apt-get install -y dpkg-dev apt-utils curl jq
 
       - name: Build the .deb package and fix filename
         run: |
@@ -49,16 +49,13 @@ jobs:
           find . -name "*.deb" -exec mv {} "$GITHUB_WORKSPACE"/ \;
           cd "$GITHUB_WORKSPACE"
 
-          # ---- Fix missing architecture suffix ----
+          # Fix missing architecture suffix
           for deb in *.deb; do
-            # Skip if already has architecture (contains _amd64 or _all etc.)
             if echo "$deb" | grep -Eq '^.*_(amd64|all|i386|arm64)\.deb$'; then
               echo "Name already correct: $deb"
               continue
             fi
-            # Get architecture from package
             arch=$(dpkg-deb -f "$deb" Architecture 2>/dev/null || echo "amd64")
-            # Build new name with arch inserted before .deb
             base=$(echo "$deb" | sed 's/\.deb$//')
             new_name="${base}_${arch}.deb"
             echo "Renaming: $deb -> $new_name"
@@ -226,3 +223,27 @@ jobs:
           else
             echo "::warning::Not ready yet – try again in a minute."
           fi
+
+      # ---------- NOVOS PASSOS ----------
+      - name: Fetch official Zen Browser release notes
+        if: steps.check.outputs.new_version == 'true'
+        id: fetch_changelog
+        run: |
+          RELEASE_JSON=$(curl -s https://api.github.com/repos/zen-browser/desktop/releases/latest)
+          CHANGELOG=$(echo "$RELEASE_JSON" | jq -r .body)
+          VERSION_TAG=$(echo "$RELEASE_JSON" | jq -r .tag_name)
+          echo "version_tag=$VERSION_TAG" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG" > /tmp/changelog.md
+
+      - name: Create GitHub Release with .deb asset
+        if: steps.check.outputs.new_version == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.fetch_changelog.outputs.version_tag }}
+          name: Zen Browser ${{ steps.fetch_changelog.outputs.version_tag }}
+          body_path: /tmp/changelog.md
+          files: ${{ github.workspace }}/*.deb
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
