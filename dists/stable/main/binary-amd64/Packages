@@ -3,10 +3,10 @@ Version: 1.21.5b
 Architecture: amd64
 Maintainer: Shariq Shahbaz <iamsh4r10@gmail.com>
 Filename: pool/main/z/zen-browser/zen-browser_1.21.5b_amd64.deb
-Size: 99988370
-MD5sum: e1a0c61759ba15edf28d7c2ca70c2200
-SHA1: 3c680a42ed3ced3795d36e885815a570e9ddbd7b
-SHA256: 59c7dcec4d897975c943911d47467a37ee95143f187b473d54fd22fd811a2e61
+Size: 99987434
+MD5sum: 1ed8066574e245b08d8fc1c73385b188
+SHA1: 848f31a5576b6bc84a3fd7c64fa65d4fee62dd0b
+SHA256: 2632dccb7020831853fcfd7e6d6f1e739d20acf20b75f940f17021299e059863
 Section: web
 Priority: optional
 Description: Zen Browser - A privacy-focused browser that helps you browse in peace.
