@@ -1,24 +1,24 @@
 Architectures: amd64
 Codename: stable
 Components: main
-Date: Mon, 13 Jul 2026 01:23:08 +0000
+Date: Tue, 14 Jul 2026 01:12:21 +0000
 Description: Unofficial Debian packages for Zen Browser
 Label: Zen Browser
 Origin: Zen Browser Unofficial
 Suite: stable
 MD5Sum:
- 867c829fdbac54072978a489aeeb95d8              213 Release
- 951198b203a3fbb3efa04d08130a583b              466 main/binary-amd64/Packages
- dc6edcd66dd10797512e3f38b0a34464              358 main/binary-amd64/Packages.gz
+ 5c16ddd2e79982c556ba6277b53e4204              213 Release
+ dfd3d30442b72cf8b2936a1ec647fe43              466 main/binary-amd64/Packages
+ 1ec8d5e05c2cfd55ce1e34587e21bbf7              361 main/binary-amd64/Packages.gz
 SHA1:
- 40755e4a273e7d5423dc8fcdf239945d118d4402              213 Release
- 0143d8ebb02361094aa966a3ff63cc86f426c46b              466 main/binary-amd64/Packages
- 8cdc80e7c8747805857f8e02d45c4a016bb2fca8              358 main/binary-amd64/Packages.gz
+ 7f9a57448a26f92756a1a9da7e09ce73ee831e3f              213 Release
+ b2046e4513d981ef06c1684a84d27b7068f87186              466 main/binary-amd64/Packages
+ 083ca30fa950d90744798dd1cdb28805354d8c04              361 main/binary-amd64/Packages.gz
 SHA256:
- f3fa86d51b0f7332f4b53d6957ba3fc0a8a7832f0edbbc777aa893f86ad6492a              213 Release
- e4dd76541aa76d955cf56fd488fe416fa2238b9effd037718b06f52cda406c5d              466 main/binary-amd64/Packages
- d61ea13ab2ca2c503d47bac8f8b78c03327119f10b34c8d487a900f17fb4a0e0              358 main/binary-amd64/Packages.gz
+ 399e26c6916273318601b73382d2be9f94bfd145218f94bb6d4e7c4b8da6d9c4              213 Release
+ c1385d665a737922d525518ba36a067049bd380c401334fdd9baa83429046119              466 main/binary-amd64/Packages
+ 6e0ea5df4c4167a90f2b1cd4f42d0c8ab305f0b825de460dcbffb32fb3990898              361 main/binary-amd64/Packages.gz
 SHA512:
- d89165cd56409f2c331fd7734f26858410d497ccb3728b016c7d27f594a4f2c764dff81b2576c2d5c9dc7f0e8d839abba43002325bd02b7059aace46872b3c28              213 Release
- f3f9237746643e72fdbd1ae27b95b1cc2dec85e23a920b3718ebd55bebc8462134e62de20979034ac4c9df9b8b66ead82a76725f63baed67a6d5c11a5eb38a86              466 main/binary-amd64/Packages
- 3a18ef29e58fa9a9937c1659f6e8d1b85d04ff7d07426fed3b0bc9a81a95e458bf69bb088107167bb1a737b1e008e282a517268f13d7ae7bd9be0449a9d193da              358 main/binary-amd64/Packages.gz
+ 8449e5dde3c76812df3c7d52af5423665aae2760139eff42dfabaf6b4cfecb58251e4701bbfe4a57c33061e061775093dbaff5b33deb5c192499002379e488a2              213 Release
+ c612efa12735eed1158ab5ec44e5ca96834985d88ec74fecb4f206f4cd1b392a52beeb3ed1ecfd25040449fb664171ae9584837297a6d816d0f02f5e19907d62              466 main/binary-amd64/Packages
+ 089f1e976dc6e4fbd2956475dd3551ac41ebcc32baa2965b36bb0ae349d5ef0e63fd7f837abe961763291771ac74a2dd06c3a0dfdbbfa50a6c1bbfedcedef17f              361 main/binary-amd64/Packages.gz
