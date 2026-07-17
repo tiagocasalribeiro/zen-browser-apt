@@ -26,6 +26,18 @@ jobs:
       - name: Install build requirements
         run: sudo apt-get update && sudo apt-get install -y dpkg-dev apt-utils curl jq
 
+      - name: Download Zen Browser tarball
+        run: |
+          cd builder
+          RELEASE_INFO=$(curl -s https://api.github.com/repos/zen-browser/desktop/releases/latest)
+          TARBALL_URL=$(echo "$RELEASE_INFO" | jq -r '.assets[] | select(.name=="zen.linux-x86_64.tar.xz") | .browser_download_url')
+          if [ -z "$TARBALL_URL" ]; then
+            echo "::error::Could not find zen.linux-x86_64.tar.xz in latest release."
+            exit 1
+          fi
+          echo "Downloading $TARBALL_URL"
+          curl -L -o zen.linux-x86_64.tar.xz "$TARBALL_URL"
+
       - name: Build the .deb package and fix filename
         run: |
           cd builder
@@ -224,7 +236,6 @@ jobs:
             echo "::warning::Not ready yet – try again in a minute."
           fi
 
-      # ---------- NOVOS PASSOS ----------
       - name: Fetch official Zen Browser release notes
         if: steps.check.outputs.new_version == 'true'
         id: fetch_changelog
