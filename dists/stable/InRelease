@@ -4,40 +4,40 @@ Hash: SHA512
 Architectures: amd64
 Codename: stable
 Components: main
-Date: Sun, 30 Aug 2026 01:56:59 +0000
+Date: Mon, 31 Aug 2026 01:53:10 +0000
 Description: Unofficial Debian packages for Zen Browser
 Label: Zen Browser
 Origin: Zen Browser Unofficial
 Suite: stable
 MD5Sum:
- f5ada2288bd83730f92ab6cc6552924a              213 Release
- 818a4d62bc177d1b59a51a9188e7613a              468 main/binary-amd64/Packages
- 60ecde1e999e211f52b778a5c1461462              360 main/binary-amd64/Packages.gz
+ dba2da8c634acd08a522676a9a5a564c              213 Release
+ 5e0eba0e94b7471cd7afa913363cc14e              468 main/binary-amd64/Packages
+ 39f1ab1e5795bfc8537ca4ea1aab87ad              361 main/binary-amd64/Packages.gz
 SHA1:
- 066bc4c8494f5aec17e2e6107102b619f4ed6870              213 Release
- eb784a0502f57410f93491c5b5b8b3994c31b776              468 main/binary-amd64/Packages
- 34741d71c64ea35589e784a16f39318a0c29a27a              360 main/binary-amd64/Packages.gz
+ 9f9fb2e063d92715ff4f745c432ad279ab85ed63              213 Release
+ a49bba669a190fb311f337317a1a0ca2d153dfdc              468 main/binary-amd64/Packages
+ 0577b62669f8d3a03f3419e1b1db840bbf389809              361 main/binary-amd64/Packages.gz
 SHA256:
- c77397bbda99cb352f822adfaea7f2ecd77d44efb4d1504b2fba6a22d85d67d5              213 Release
- bc98cf58e4f32fc124e1dba6046959720e3c3cdf170e23531f9651444d15df30              468 main/binary-amd64/Packages
- 4ed2bbf2d31e55da176cd39149f9066359dfa6fcabb3d57b9b89678e45c7cb33              360 main/binary-amd64/Packages.gz
+ b5dda069142055a68e181f13cf508d8b50680c04490028996bd424b61961626b              213 Release
+ ae1d39d6afa113f89ec198fc89e36f81c83597a1b1e7beef1d10c701e55daf9c              468 main/binary-amd64/Packages
+ 5fad61792cbd8a2b33f6853826fa7c6e6abece453ce63b81dc1d554fa988ffd7              361 main/binary-amd64/Packages.gz
 SHA512:
- 9d2ae6b35a179303567869602e1870da2daa5f36e346aefebb22b44c30c80635bd99a2fe776f28ab2193b282a53f25bab9b51893e914d4af89591ad4cd79b863              213 Release
- 4d3b308a09596ef30fdeafc04c406dd78b3976861b4dfbc15970efe737423646967ddab79ff046d0b5184e4446a8a8d7e7e0167abc9e31413f209b81a4076b7b              468 main/binary-amd64/Packages
- 6a79c0264779c66f4101bb39cfc3b50073c017b5ca303672d5d5e457781848e8be6413531db4394c36df6fbb6b059b47f0df8ff13d8df955e3442e81ed985dd9              360 main/binary-amd64/Packages.gz
+ 4d50336a51b7e03aad9674aad14f283dbc507b68a54c2a84565472e0288248a7b553e8779d2f5e475bed07aa80467671e3f6d0ed104e3b0586c86de164b7304b              213 Release
+ 6f7e52c8f631204bd4c8ad8c63077168236ee124dd1a81b06dfbd52c4b21edc023c782db12959b2183b86057e504a0f5f0d508fcb333b83ebf01ad965d2c8faa              468 main/binary-amd64/Packages
+ c0e3026276ba973f6aab1ca695ba329ea856b688a127cec7e6dda7a95377a8f10a22de2e75d9dbaf617da54c6b6bf17a30e9a3bc31c539bd3c00ac381b5ae922              361 main/binary-amd64/Packages.gz
 -----BEGIN PGP SIGNATURE-----
 
-iQIzBAEBCgAdFiEES5umeXECIPQAX9w91P4sPXACIsoFAmqTjesACgkQ1P4sPXAC
-IsqGyhAAlmQl1AFgAjw05p96/mt+XP83HDd5A7f/W9crmaBBvugojYHT3pJowRCu
-DQevO807sgS6mTSuIpmEMzypksPGY14ViuT39zRBdOvcgh6v0FtfIqeRc28+tItU
-OuSv74wwjh844q9dPK7w+4qSrGsNVuz5vcGJumxijoGGYoG8JKixuhyfx075KEm1
-IoBTHiLFDza8XNPtzK0UM7QSB5Ft8k8sIWsBamsukYdhNaQtBhOtqFx88wN123IR
-10AOhP/CTCSVpHj4DN7MiDrToqGaRAYOt3CHB3+nBlZtwDRdvfBSI5P0AUQFILSa
-XDWCtq3jiYdkeRkDQ6uZ6Vd1NQSEI7ILZjF6EiJyP0ae7PdkYDq7dhMSb33ZzGAt
-UUEsHhtArqGGZJ45Y4MJ1+EF9i7uZlb69YoJo0DW6pLKuvXxPd+FnFKs/I8zAkhN
-t/BDEFaajW8F8qvzaLRo9+vvmlpi1n6ZhoGru6Kj9nWu9uLuxbVsfeWKHai0jPo8
-VGVRC3rvlkUzOWVp5Gm4AWxQ1Btyy/6MBxOmVFQM5MY8AEyFIHoHaqt4q1w2WXJy
-asAI0TkjXWn4b73CbyTyBG/gbM7jaJCfM3gKcPvBlgx3D2GNPsy9ler98s8FfPAJ
-Kc1EIvF6xISNgedw4wOLghyfnDjw9jmppi80J0VUPEa4oZSdKpI=
-=9WGp
+iQIzBAEBCgAdFiEES5umeXECIPQAX9w91P4sPXACIsoFAmqU3oYACgkQ1P4sPXAC
+Isorig//YgIp1pa2TEE7EDkEmgHtk1BZrGptzppY6CwiPaHGQUQ+tDaiBEs6c5MF
+RB3hOwszXhbU/VQ59BBgceohHTFANAPY4wvkSQdCL8OLNA26JETJ08qtcqD37wda
++wBH1CVyj9LdMQRDKGWVtOLEh42xLWCGpmqZb0zDYl8js6355VDZH4P3k6C3mnZD
+ndYAaB+UbVR0rfxsvpM/w8Jh3JPJqEXhs4SXD53z4M2E/qvTXk1SVR1Ou8D81cvC
+H5dCRF/vQIg8ZM3HwHkolPI19eSsuSOKiiXbb+scA508rEqrNyJFI6/+W2aG7ils
+czl/+pLa/JcdBAlw8m/m/Hu0lz+UzMdtERHXcAaeLPINK5KFmSweISVGAboPq8Hd
+RITnSx/iQHzCvMYIMMj637qU2g+dELQUuP/kRnAP1yG4WN6nEZAP/eKLEbpJG/fq
+/WIPdzsUSKeAZII6asMBKyWEUr8TBdfwr2yG7bTTnGqNV2EzDs2DsuZsTpXxHatL
+40rseyfC9Md/Ffz0fmwrEYgVFagQmalREzL6K/9lGKY6ItgZowtfUvK9/oYIQZ/9
+J2yEgLpclgl3HSk2J4cvoVUxt2hiwNce3XzMSdFrmZxw7S7ZuhYXRrokXbUcI4RU
+GmuX/zLnMvEFTcVAipcXorSP+PvGXDbCEXZB6ZzacqpAnqFdD3c=
+=tTp+
 -----END PGP SIGNATURE-----
