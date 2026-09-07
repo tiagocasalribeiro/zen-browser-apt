@@ -73,7 +73,6 @@ jobs:
       - name: Check if release already exists
         id: check_release
         run: |
-          # Get the version from the .deb package
           VERSION=$(dpkg-deb -f ./*.deb Version 2>/dev/null)
           echo "Package version: $VERSION"
           if gh release view "$VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
@@ -96,45 +95,40 @@ jobs:
 
       - name: Create GitHub Release and upload .deb asset
         if: steps.check_release.outputs.new_version == 'true'
-        id: create_release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           VERSION="${{ steps.check_release.outputs.version }}"
           DEB_FILE="${{ steps.check_release.outputs.deb_file }}"
-          # Create release
           gh release create "$VERSION" \
             --repo "$GITHUB_REPOSITORY" \
             --title "Zen Browser $VERSION" \
             --notes-file /tmp/changelog.md \
             "$DEB_FILE"
 
-          # Get the asset browser_download_url
-          ASSET_URL=$(gh release view "$VERSION" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[0].browser_download_url')
-          echo "asset_url=$ASSET_URL" >> $GITHUB_OUTPUT
-          echo "::notice::Release created with asset URL: $ASSET_URL"
-
-      - name: Prepare metadata directory
+      - name: Prepare metadata directory and temporary pool
         if: steps.check_release.outputs.new_version == 'true'
         run: |
           mkdir -p deploy/dists/stable/main/binary-amd64
-          # Prepare a temporary pool structure for dpkg-scanpackages
           mkdir -p tmp_pool/pool/main/z/zen-browser
           cp "$GITHUB_WORKSPACE"/*.deb tmp_pool/pool/main/z/zen-browser/
 
-      - name: Generate Packages file with asset URL
+      - name: Generate Packages file with release asset URL
         if: steps.check_release.outputs.new_version == 'true'
         run: |
           cd tmp_pool
           dpkg-scanpackages --arch amd64 pool/main > ../deploy/dists/stable/main/binary-amd64/Packages
           cd ..
-          # Replace the Filename field with the release asset URL
-          ASSET_URL="${{ steps.create_release.outputs.asset_url }}"
-          sed -i "s|^Filename: .*|Filename: $ASSET_URL|" deploy/dists/stable/main/binary-amd64/Packages
-          # Compress Packages
+
+          VERSION="${{ steps.check_release.outputs.version }}"
+          DEB_FILE="${{ steps.check_release.outputs.deb_file }}"
+          RELEASE_URL="https://github.com/${{ github.repository }}/releases/download/${VERSION}/${DEB_FILE}"
+
+          # Substitui o campo Filename pela URL do asset
+          sed -i "s|^Filename: .*|Filename: ${RELEASE_URL}|" deploy/dists/stable/main/binary-amd64/Packages
+
           gzip -9c deploy/dists/stable/main/binary-amd64/Packages > deploy/dists/stable/main/binary-amd64/Packages.gz
 
-          # Generate Release file
           apt-ftparchive \
             -o APT::FTPArchive::Release::Origin="Zen Browser Unofficial" \
             -o APT::FTPArchive::Release::Label="Zen Browser" \
@@ -145,7 +139,6 @@ jobs:
             -o APT::FTPArchive::Release::Description="Unofficial Debian packages for Zen Browser" \
             release deploy/dists/stable > deploy/dists/stable/Release
 
-          # Verify Packages file is not empty
           if [ ! -s deploy/dists/stable/main/binary-amd64/Packages ]; then
             echo "::error::Packages file is empty!"
             exit 1
@@ -189,7 +182,6 @@ jobs:
             rm -rf *
           fi
 
-          # Copy metadata files
           cp -r "$GITHUB_WORKSPACE"/deploy/* .
           touch .nojekyll
 
@@ -203,11 +195,9 @@ jobs:
       - name: Verify deployment
         if: steps.check_release.outputs.new_version == 'true'
         run: |
-          DEB_FILE="${{ steps.check_release.outputs.deb_file }}"
-          # Check Packages file
           PACKAGES_URL="https://tiagocasalribeiro.github.io/zen-browser-apt/dists/stable/main/binary-amd64/Packages"
           echo "Waiting 30s for Pages..."
           sleep 30
-          echo "Checking Packages:"
+          echo "Checking Packages file:"
           curl -s -o /dev/null -w "  HTTP %{http_code}\n" "$PACKAGES_URL"
-          curl -s "$PACKAGES_URL" | head -5
+          curl -s "$PACKAGES_URL" | grep -A5 "Package: zen-browser" || true
