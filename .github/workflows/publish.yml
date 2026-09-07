@@ -72,6 +72,8 @@ jobs:
 
       - name: Check if release already exists
         id: check_release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}   # <-- ADICIONADO
         run: |
           VERSION=$(dpkg-deb -f ./*.deb Version 2>/dev/null)
           echo "Package version: $VERSION"
