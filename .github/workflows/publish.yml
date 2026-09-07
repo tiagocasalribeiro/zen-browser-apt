@@ -35,7 +35,6 @@ jobs:
       - name: Build do .deb usando o script original
         run: |
           cd builder
-          # Deteta o script de build
           BUILD_SCRIPT=""
           for name in build.sh build debian-package.sh create-deb.sh package.sh; do
             FOUND=$(find . -maxdepth 2 -type f -name "$name" | head -n 1)
@@ -52,7 +51,6 @@ jobs:
           chmod +x "$BUILD_SCRIPT"
           ./"$BUILD_SCRIPT"
 
-          # Move o .deb para o workspace root
           find . -name "*.deb" -exec mv {} "$GITHUB_WORKSPACE"/ \;
           cd "$GITHUB_WORKSPACE"
 
@@ -84,10 +82,11 @@ jobs:
           echo "$GPG_PRIVATE_KEY" | gpg --batch --import
           GPG_KEY_ID="$(gpg --list-keys --with-colons | awk -F: '/^pub:/ {print $5; exit}')"
           echo "GPG_KEY_ID=$GPG_KEY_ID" >> "$GITHUB_ENV"
-          # Exportar a chave pública para o site
           gpg --export --armor "$GPG_KEY_ID" > site/KEY.gpg
 
       - name: Gerar metadados APT
+        env:
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: |
           cd site
           # Gerar Packages
@@ -109,8 +108,13 @@ jobs:
 
           cd dists/stable
           apt-ftparchive release -c=/tmp/ftp-release.conf . > Release
-          gpg --batch --yes --default-key "$GPG_KEY_ID" --clearsign -o InRelease Release
-          gpg --batch --yes --default-key "$GPG_KEY_ID" --detach-sign --armor -o Release.gpg Release
+
+          # Assinar com GPG (usando passphrase via loopback)
+          gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" \
+            --default-key "$GPG_KEY_ID" --clearsign -o InRelease Release
+
+          gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" \
+            --default-key "$GPG_KEY_ID" --detach-sign --armor -o Release.gpg Release
 
       - name: Configurar GitHub Pages
         uses: actions/configure-pages@v5
