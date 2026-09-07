@@ -73,20 +73,20 @@ jobs:
       - name: Check if release already exists
         id: check_release
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}   # <-- ADICIONADO
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           VERSION=$(dpkg-deb -f ./*.deb Version 2>/dev/null)
           echo "Package version: $VERSION"
           if gh release view "$VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "new_version=false" >> $GITHUB_OUTPUT
+            echo "release_exists=true" >> $GITHUB_OUTPUT
           else
-            echo "new_version=true" >> $GITHUB_OUTPUT
+            echo "release_exists=false" >> $GITHUB_OUTPUT
           fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "deb_file=$(ls -1 ./*.deb | head -n 1 | xargs basename)" >> $GITHUB_OUTPUT
 
       - name: Fetch official Zen Browser release notes
-        if: steps.check_release.outputs.new_version == 'true'
+        if: steps.check_release.outputs.release_exists == 'false'
         id: fetch_changelog
         run: |
           RELEASE_JSON=$(curl -s https://api.github.com/repos/zen-browser/desktop/releases/latest)
@@ -96,7 +96,7 @@ jobs:
           echo "$CHANGELOG" > /tmp/changelog.md
 
       - name: Create GitHub Release and upload .deb asset
-        if: steps.check_release.outputs.new_version == 'true'
+        if: steps.check_release.outputs.release_exists == 'false'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -108,15 +108,14 @@ jobs:
             --notes-file /tmp/changelog.md \
             "$DEB_FILE"
 
+      # A partir daqui, tudo corre sempre (não depende da release)
       - name: Prepare metadata directory and temporary pool
-        if: steps.check_release.outputs.new_version == 'true'
         run: |
           mkdir -p deploy/dists/stable/main/binary-amd64
           mkdir -p tmp_pool/pool/main/z/zen-browser
           cp "$GITHUB_WORKSPACE"/*.deb tmp_pool/pool/main/z/zen-browser/
 
       - name: Generate Packages file with release asset URL
-        if: steps.check_release.outputs.new_version == 'true'
         run: |
           cd tmp_pool
           dpkg-scanpackages --arch amd64 pool/main > ../deploy/dists/stable/main/binary-amd64/Packages
@@ -149,7 +148,6 @@ jobs:
           head -20 deploy/dists/stable/main/binary-amd64/Packages
 
       - name: Sign Release and export public key
-        if: steps.check_release.outputs.new_version == 'true'
         env:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
@@ -168,7 +166,6 @@ jobs:
           gpg --verify dists/stable/InRelease
 
       - name: Deploy to gh-pages (metadata only)
-        if: steps.check_release.outputs.new_version == 'true'
         run: |
           mkdir deploy_repo
           cd deploy_repo
@@ -195,11 +192,15 @@ jobs:
           git push origin gh-pages --force
 
       - name: Verify deployment
-        if: steps.check_release.outputs.new_version == 'true'
         run: |
           PACKAGES_URL="https://tiagocasalribeiro.github.io/zen-browser-apt/dists/stable/main/binary-amd64/Packages"
+          RELEASE_URL="https://tiagocasalribeiro.github.io/zen-browser-apt/dists/stable/Release"
           echo "Waiting 30s for Pages..."
           sleep 30
+
+          echo "Checking Release file:"
+          curl -s -o /dev/null -w "  HTTP %{http_code}\n" "$RELEASE_URL"
+
           echo "Checking Packages file:"
           curl -s -o /dev/null -w "  HTTP %{http_code}\n" "$PACKAGES_URL"
           curl -s "$PACKAGES_URL" | grep -A5 "Package: zen-browser" || true
