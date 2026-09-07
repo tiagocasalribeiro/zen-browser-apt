@@ -8,27 +8,34 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: true
 
 jobs:
-  publish:
+  build-and-deploy:
     runs-on: ubuntu-latest
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
-      - name: Checkout the original build script
+      - name: Checkout do repositório (script original)
         uses: actions/checkout@v4
         with:
           repository: sh4r10/zen-browser-debian
           path: builder
 
-      - name: Install build requirements
-        run: sudo apt-get update && sudo apt-get install -y dpkg-dev apt-utils curl jq
+      - name: Instalar ferramentas
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y dpkg-dev apt-utils gnupg
 
-      - name: Build the .deb package and fix filename
+      - name: Build do .deb usando o script original
         run: |
           cd builder
+          # Deteta o script de build
           BUILD_SCRIPT=""
           for name in build.sh build debian-package.sh create-deb.sh package.sh; do
             FOUND=$(find . -maxdepth 2 -type f -name "$name" | head -n 1)
@@ -37,170 +44,81 @@ jobs:
           [ -z "$BUILD_SCRIPT" ] && BUILD_SCRIPT=$(find . -maxdepth 2 -type f -name "*.sh" -executable | head -n 1)
 
           if [ -z "$BUILD_SCRIPT" ]; then
-            echo "::error::No build script found."
+            echo "::error::Nenhum script de build encontrado."
             exit 1
           fi
 
-          echo "Using: $BUILD_SCRIPT"
+          echo "Usando: $BUILD_SCRIPT"
           chmod +x "$BUILD_SCRIPT"
           ./"$BUILD_SCRIPT"
 
-          # Move .deb to workspace root
+          # Move o .deb para o workspace root
           find . -name "*.deb" -exec mv {} "$GITHUB_WORKSPACE"/ \;
           cd "$GITHUB_WORKSPACE"
 
-          # Fix missing architecture suffix
+          # Corrigir nome do ficheiro (adicionar _amd64 se faltar)
           for deb in *.deb; do
             if echo "$deb" | grep -Eq '^.*_(amd64|all|i386|arm64)\.deb$'; then
-              echo "Name already correct: $deb"
+              echo "Nome já correto: $deb"
               continue
             fi
             arch=$(dpkg-deb -f "$deb" Architecture 2>/dev/null || echo "amd64")
             base=$(echo "$deb" | sed 's/\.deb$//')
             new_name="${base}_${arch}.deb"
-            echo "Renaming: $deb -> $new_name"
+            echo "Renomeando: $deb -> $new_name"
             mv "$deb" "$new_name"
           done
 
-          echo "=== .deb files after renaming ==="
           ls -la ./*.deb
 
-          if [ "$(find . -name "*.deb" | wc -l)" -eq 0 ]; then
-            echo "::error::No .deb created."
-            exit 1
-          fi
-
-      - name: Check if release already exists
-        id: check_release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Criar estrutura do site APT
         run: |
-          VERSION=$(dpkg-deb -f ./*.deb Version 2>/dev/null)
-          echo "Package version: $VERSION"
-          if gh release view "$VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "release_exists=true" >> $GITHUB_OUTPUT
-          else
-            echo "release_exists=false" >> $GITHUB_OUTPUT
-          fi
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "deb_file=$(ls -1 ./*.deb | head -n 1 | xargs basename)" >> $GITHUB_OUTPUT
+          mkdir -p site/pool/main/z/zen-browser
+          mkdir -p site/dists/stable/main/binary-amd64
+          cp ./*.deb site/pool/main/z/zen-browser/
 
-      - name: Fetch official Zen Browser release notes
-        if: steps.check_release.outputs.release_exists == 'false'
-        id: fetch_changelog
-        run: |
-          RELEASE_JSON=$(curl -s https://api.github.com/repos/zen-browser/desktop/releases/latest)
-          CHANGELOG=$(echo "$RELEASE_JSON" | jq -r .body)
-          VERSION_TAG=$(echo "$RELEASE_JSON" | jq -r .tag_name)
-          echo "version_tag=$VERSION_TAG" >> $GITHUB_OUTPUT
-          echo "$CHANGELOG" > /tmp/changelog.md
-
-      - name: Create GitHub Release and upload .deb asset
-        if: steps.check_release.outputs.release_exists == 'false'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          VERSION="${{ steps.check_release.outputs.version }}"
-          DEB_FILE="${{ steps.check_release.outputs.deb_file }}"
-          gh release create "$VERSION" \
-            --repo "$GITHUB_REPOSITORY" \
-            --title "Zen Browser $VERSION" \
-            --notes-file /tmp/changelog.md \
-            "$DEB_FILE"
-
-      # A partir daqui, tudo corre sempre (não depende da release)
-      - name: Prepare metadata directory and temporary pool
-        run: |
-          mkdir -p deploy/dists/stable/main/binary-amd64
-          mkdir -p tmp_pool/pool/main/z/zen-browser
-          cp "$GITHUB_WORKSPACE"/*.deb tmp_pool/pool/main/z/zen-browser/
-
-      - name: Generate Packages file with release asset URL
-        run: |
-          cd tmp_pool
-          dpkg-scanpackages --arch amd64 pool/main > ../deploy/dists/stable/main/binary-amd64/Packages
-          cd ..
-
-          VERSION="${{ steps.check_release.outputs.version }}"
-          DEB_FILE="${{ steps.check_release.outputs.deb_file }}"
-          RELEASE_URL="https://github.com/${{ github.repository }}/releases/download/${VERSION}/${DEB_FILE}"
-
-          # Substitui o campo Filename pela URL do asset
-          sed -i "s|^Filename: .*|Filename: ${RELEASE_URL}|" deploy/dists/stable/main/binary-amd64/Packages
-
-          gzip -9c deploy/dists/stable/main/binary-amd64/Packages > deploy/dists/stable/main/binary-amd64/Packages.gz
-
-          apt-ftparchive \
-            -o APT::FTPArchive::Release::Origin="Zen Browser Unofficial" \
-            -o APT::FTPArchive::Release::Label="Zen Browser" \
-            -o APT::FTPArchive::Release::Suite="stable" \
-            -o APT::FTPArchive::Release::Codename="stable" \
-            -o APT::FTPArchive::Release::Architectures="amd64" \
-            -o APT::FTPArchive::Release::Components="main" \
-            -o APT::FTPArchive::Release::Description="Unofficial Debian packages for Zen Browser" \
-            release deploy/dists/stable > deploy/dists/stable/Release
-
-          if [ ! -s deploy/dists/stable/main/binary-amd64/Packages ]; then
-            echo "::error::Packages file is empty!"
-            exit 1
-          fi
-          echo "=== Packages preview ==="
-          head -20 deploy/dists/stable/main/binary-amd64/Packages
-
-      - name: Sign Release and export public key
+      - name: Importar chave GPG
         env:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
-          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: |
-          cd deploy
           echo "$GPG_PRIVATE_KEY" | gpg --batch --import
-          KEY_ID=$(gpg --list-secret-keys --keyid-format LONG | grep sec | awk '{print $2}' | cut -d'/' -f2)
+          GPG_KEY_ID="$(gpg --list-keys --with-colons | awk -F: '/^pub:/ {print $5; exit}')"
+          echo "GPG_KEY_ID=$GPG_KEY_ID" >> "$GITHUB_ENV"
+          # Exportar a chave pública para o site
+          gpg --export --armor "$GPG_KEY_ID" > site/KEY.gpg
 
-          rm -f dists/stable/Release.gpg dists/stable/Release.asc
-
-          gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" \
-            --clearsign --armor --output dists/stable/InRelease dists/stable/Release
-
-          gpg --export --armor "$KEY_ID" > KEY.gpg
-
-          gpg --verify dists/stable/InRelease
-
-      - name: Deploy to gh-pages (metadata only)
+      - name: Gerar metadados APT
         run: |
-          mkdir deploy_repo
-          cd deploy_repo
-          git init
-          git remote add origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
-          git fetch origin gh-pages || true
+          cd site
+          # Gerar Packages
+          dpkg-scanpackages pool/main /dev/null 2>/dev/null \
+            > dists/stable/main/binary-amd64/Packages
+          gzip -9c dists/stable/main/binary-amd64/Packages \
+            > dists/stable/main/binary-amd64/Packages.gz
 
-          if git ls-remote --exit-code --heads origin gh-pages; then
-            git checkout gh-pages
-            find . -maxdepth 1 -not -name '.git' -not -name '.' -exec rm -rf {} \;
-          else
-            git checkout --orphan gh-pages
-            rm -rf *
-          fi
+          # Criar ficheiro de configuração para o Release
+          cat > /tmp/ftp-release.conf << EOF
+          APT::FTPArchive::Release::Origin "Zen Browser Unofficial";
+          APT::FTPArchive::Release::Label "Zen Browser";
+          APT::FTPArchive::Release::Suite "stable";
+          APT::FTPArchive::Release::Codename "stable";
+          APT::FTPArchive::Release::Architectures "amd64";
+          APT::FTPArchive::Release::Components "main";
+          APT::FTPArchive::Release::Description "Unofficial Debian packages for Zen Browser";
+          EOF
 
-          cp -r "$GITHUB_WORKSPACE"/deploy/* .
-          touch .nojekyll
+          cd dists/stable
+          apt-ftparchive release -c=/tmp/ftp-release.conf . > Release
+          gpg --batch --yes --default-key "$GPG_KEY_ID" --clearsign -o InRelease Release
+          gpg --batch --yes --default-key "$GPG_KEY_ID" --detach-sign --armor -o Release.gpg Release
 
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+      - name: Configurar GitHub Pages
+        uses: actions/configure-pages@v5
 
-          git add -A
-          git commit -m "Update apt repository metadata [skip ci]" || echo "No changes to commit"
-          git push origin gh-pages --force
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
 
-      - name: Verify deployment
-        run: |
-          PACKAGES_URL="https://tiagocasalribeiro.github.io/zen-browser-apt/dists/stable/main/binary-amd64/Packages"
-          RELEASE_URL="https://tiagocasalribeiro.github.io/zen-browser-apt/dists/stable/Release"
-          echo "Waiting 30s for Pages..."
-          sleep 30
-
-          echo "Checking Release file:"
-          curl -s -o /dev/null -w "  HTTP %{http_code}\n" "$RELEASE_URL"
-
-          echo "Checking Packages file:"
-          curl -s -o /dev/null -w "  HTTP %{http_code}\n" "$PACKAGES_URL"
-          curl -s "$PACKAGES_URL" | grep -A5 "Package: zen-browser" || true
+      - name: Publicar no GitHub Pages
+        uses: actions/deploy-pages@v4
