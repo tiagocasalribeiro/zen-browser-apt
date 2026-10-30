@@ -30,7 +30,21 @@ jobs:
       - name: Instalar ferramentas
         run: |
           sudo apt-get update
-          sudo apt-get install -y dpkg-dev apt-utils gnupg
+          sudo apt-get install -y dpkg-dev apt-utils gnupg curl
+
+      - name: Descarregar o tarball do Zen Browser
+        run: |
+          cd builder
+          # Obter a URL de descarga do asset mais recente para zen.linux-x86_64.tar.xz
+          LATEST_RELEASE_URL=$(curl -s https://api.github.com/repos/zen-browser/desktop/releases/latest | grep "browser_download_url.*zen\.linux-x86_64\.tar\.xz" | cut -d '"' -f 4)
+          
+          if [ -z "$LATEST_RELEASE_URL" ]; then
+            echo "::error::Não foi possível encontrar a URL do tarball mais recente."
+            exit 1
+          fi
+          
+          echo "A descarregar de: $LATEST_RELEASE_URL"
+          curl -L -o zen.linux-x86_64.tar.xz "$LATEST_RELEASE_URL"
 
       - name: Build do .deb usando o script original
         run: |
@@ -57,13 +71,13 @@ jobs:
           # Corrigir nome do ficheiro (adicionar _amd64 se faltar)
           for deb in *.deb; do
             if echo "$deb" | grep -Eq '^.*_(amd64|all|i386|arm64)\.deb$'; then
-              echo "Nome já correto: $deb"
+              echo "Nome já correcto: $deb"
               continue
             fi
             arch=$(dpkg-deb -f "$deb" Architecture 2>/dev/null || echo "amd64")
             base=$(echo "$deb" | sed 's/\.deb$//')
             new_name="${base}_${arch}.deb"
-            echo "Renomeando: $deb -> $new_name"
+            echo "A renomear: $deb -> $new_name"
             mv "$deb" "$new_name"
           done
 
